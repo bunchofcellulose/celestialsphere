@@ -25,6 +25,15 @@ impl Quaternion {
         }
     }
 
+    pub fn identity() -> Self {
+        Quaternion {
+            w: 1.0,
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        }
+    }
+
     // Multiply two quaternions
     pub fn multiply(self, other: Quaternion) -> Self {
         Quaternion {
