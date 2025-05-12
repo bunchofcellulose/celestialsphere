@@ -6,41 +6,113 @@ body {
     margin: 20px;
 }
 
-#hero {
-    margin: 0;
+.selection-box {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    padding: 8px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: white;
+    border-radius: 4px;
+    font-family: monospace;
+    z-index: 100;
+}
+
+.selection-box div {
     display: flex;
-    flex-direction: column;
-    justify-content: center;
     align-items: center;
+    gap: 5px;
 }
 
-#links {
-    width: 400px;
-    text-align: left;
-    font-size: x-large;
-    color: white;
+/* SlidersPanel styles */
+.sliders-panel {
+    position: absolute;
+    top: 20px;
+    left: 20px;
     display: flex;
     flex-direction: column;
-}
-
-#links a {
-    color: white;
-    text-decoration: none;
-    margin-top: 20px;
-    margin: 10px 0px;
-    border: white 1px solid;
-    border-radius: 5px;
+    gap: 10px;
+    background-color: rgba(0, 0, 0, 0.6);
     padding: 10px;
+    border-radius: 4px;
+    color: white;
+    font-family: monospace;
 }
 
-#links a:hover {
-    background-color: #1f1f1f;
+.sliders-panel div {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ModePanel styles */
+.mode-panel {
+    position: absolute;
+    top: 200px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+    border-radius: 4px;
+    color: white;
+    font-family: monospace;
+}
+
+.mode-panel button {
+    width: 50px;
+    height: 50px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    color: white;
+    border: none;
+    border-radius: 4px;
     cursor: pointer;
 }
 
-#header {
-    max-width: 1200px;
+/* Active and inactive button colors */
+.mode-panel button.active {
+    background-color: #CCC;
 }
 
+.mode-panel button.inactive {
+    background-color: #666;
+}
 
+.left-panel div {
+    position: absolute;
+    top: 250px; /* Same vertical position as the mode panel */
+    right: 20px; /* Align with the right side of the screen */
+    display: flex;
+    flex-direction: column; /* Arrange buttons vertically */
+    gap: 10px; /* Add spacing between buttons */
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+    border-radius: 4px;
+    color: white;
+    font-family: monospace;
+}
 
+.left-panel button {
+    width: 40px;
+    height: 40px;
+    background-color: #888;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.triangle-info-box {
+    position: absolute;
+    top: 250px; /* Adjust this to position it below the SelectionBox */
+    right: 20px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+    border-radius: 4px;
+    color: white;
+    font-family: monospace;
+    z-index: 100;
+}
