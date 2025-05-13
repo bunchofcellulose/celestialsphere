@@ -62,7 +62,7 @@ pub fn Sphere(
         if pz.is_nan() {
             return Selected::None;
         }
-        for p in points.read().iter() {
+        for p in points().iter() {
             let [x, y, z] = p.rotated;
             if z < 0.0 {
                 continue;
@@ -95,7 +95,7 @@ pub fn Sphere(
                 dragged_point.set(None);
             } else {
                 selected_point.set(Some(selected));
-                if points.read()[selected].movable {
+                if points()[selected].movable {
                     dragged_point.set(Some(selected));
                 }
             }
@@ -114,7 +114,13 @@ pub fn Sphere(
                 if p == selected {
                     return;
                 }
-                arcs.write().push((p, selected));
+                if arcs().contains(&(selected, p)) {
+                    arcs.write().retain(|&(p1, p2)| p1 != selected || p2 != p);
+                } else if arcs().contains(&(p, selected)) {
+                    arcs.write().retain(|&(p1, p2)| p1 != p || p2 != selected);
+                } else {
+                    arcs.write().push((selected, p));
+                }
             }
         }
     };
@@ -143,7 +149,7 @@ pub fn Sphere(
         if let Some(i) = selected_point() {
             match event.key() {
                 Key::Delete => {
-                    if !points.read()[i].removable {
+                    if !points()[i].removable {
                         return;
                     }
                     points.write().swap_remove(i);
@@ -171,11 +177,15 @@ pub fn Sphere(
                     selected_point.set(None);
                 }
                 Key::Character(ref c) if c.as_str() == "." => {
-                    if !great_circles.read().contains(&i) {
+                    if !great_circles().contains(&i) {
                         great_circles.write().push(i);
                     } else {
                         great_circles.write().retain(|&x| x != i);
                     }
+                }
+                Key::Character(ref c) if c.as_str() == "," => {
+                    let new = points()[i].new_inverted(points().len());
+                    points.write().push(new);
                 }
                 Key::Character(c) => {
                     points.write()[i].name.push_str(&c);
@@ -243,8 +253,7 @@ pub fn Sphere(
                     GreatCircleDrawer { great_circles, points }
                     ArcDrawer { arcs, points }
 
-                    for (i , x , y , _ , r , opacity , name) in points
-                        .read()
+                    for (i , x , y , _ , r , opacity , name) in points()
                         .iter()
                         .map(|point| {
                             let [x, y, z] = point.rotated;
@@ -281,26 +290,39 @@ pub fn Sphere(
 #[component]
 fn ArcDrawer(arcs: Signal<Vec<(usize, usize)>>, points: Signal<Vec<Point>>) -> Element {
     // Function to calculate the great circle arc points
-    let calculate_great_circle_arc = |p1: Vec3, p2: Vec3| -> Vec<Vec3> {
+    let calculate_great_circle_arc = |mut p1: Vec3, p2: Vec3| -> Vec<Vec3> {
         let mut arc_points = Vec::new();
+        let mut pq = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
+        if pq.powi(2) > 0.9999 {
+            p1[0] += 0.001;
+            pq = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
+        }
+        let r = (1.0 - pq.powi(2)).sqrt();
+        let z = [
+           ( p2[0] - p1[0] * pq) / r,
+            ( p2[1] - p1[1] * pq) / r,
+            ( p2[2] - p1[2] * pq) / r,
+        ];
+        let t = pq.acos();
         let steps = 200; // Number of points along the arc
         for i in 0..=steps {
-            let t = i as f64 / steps as f64;
-            let x = (1.0 - t) * p1[0] + t * p2[0];
-            let y = (1.0 - t) * p1[1] + t * p2[1];
-            let z = (1.0 - t) * p1[2] + t * p2[2];
-            let length = (x.powi(2) + y.powi(2) + z.powi(2)).sqrt();
-            arc_points.push([x / length, y / length, z / length]);
+            let theta = i as f64 * t / steps as f64;
+            let point = [
+                theta.cos() * p1[0] + theta.sin() * z[0],
+                theta.cos() * p1[1] + theta.sin() * z[1],
+                theta.cos() * p1[2] + theta.sin() * z[2],
+            ];
+            arc_points.push(point);
         }
         arc_points
     };
 
     rsx! {
-        for (front_path_data , back_path_data) in arcs.read()
+        for (front_path_data , back_path_data) in arcs()
             .iter()
             .map(|&(p1_idx, p2_idx)| {
-                let p1 = points.read()[p1_idx].rotated;
-                let p2 = points.read()[p2_idx].rotated;
+                let p1 = points()[p1_idx].rotated;
+                let p2 = points()[p2_idx].rotated;
                 let arc_points = calculate_great_circle_arc(p1, p2);
                 let mut front_path = Vec::new();
                 let mut back_path = Vec::new();
@@ -365,11 +387,10 @@ fn GreatCircleDrawer(great_circles: Signal<Vec<usize>>, points: Signal<Vec<Point
     };
 
     rsx! {
-        for (front_path_data , back_path_data) in great_circles
-            .read()
+        for (front_path_data , back_path_data) in great_circles()
             .iter()
             .map(|&pole_idx| {
-                let pole = points.read()[pole_idx].rotated;
+                let pole = points()[pole_idx].rotated;
                 let circle_points = calculate_great_circle(pole);
                 let mut front_path = Vec::new();
                 let mut back_path = Vec::new();

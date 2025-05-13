@@ -5,13 +5,13 @@ pub fn SelectionBox(points: Signal<Vec<Point>>, selected_point: Signal<Option<us
     let Some(i) = selected_point() else {
         return rsx! {};
     };
-    let [x, y, z] = points.read()[i].absolute;
-    let [rx, ry, rz] = points.read()[i].rotated;
-    let [theta, phi] = points.read()[i].abs_polar;
-    let [rtheta, rphi] = points.read()[i].rot_polar;
-    let name = &points.read()[i].name;
-    let movable = points.read()[i].movable;
-    let removable = points.read()[i].removable;
+    let [x, y, z] = points()[i].absolute;
+    let [rx, ry, rz] = points()[i].rotated;
+    let [theta, phi] = points()[i].abs_polar;
+    let [rtheta, rphi] = points()[i].rot_polar;
+    let name = &points()[i].name;
+    let movable = points()[i].movable;
+    let removable = points()[i].removable;
 
     rsx! {
         div { class: "selection-box",
@@ -67,15 +67,15 @@ pub fn SelectionBox(points: Signal<Vec<Point>>, selected_point: Signal<Option<us
 
 #[component]
 pub fn TriangleInfoBox(points: Signal<Vec<Point>>) -> Element {
-    if points.read().len() < 3 {
+    if points().len() < 3 {
         return rsx! {}; // Do not display if there are fewer than 3 points
     }
 
     // Get the last three points
-    let len = points.read().len();
-    let p1 = points.read()[len - 3].absolute;
-    let p2 = points.read()[len - 2].absolute;
-    let p3 = points.read()[len - 1].absolute;
+    let len = points().len();
+    let p1 = points()[len - 3].absolute;
+    let p2 = points()[len - 2].absolute;
+    let p3 = points()[len - 1].absolute;
 
     // Function to calculate the angular distance between two points on a sphere
     let angular_distance = |a: Vec3, b: Vec3| -> f64 {
@@ -124,7 +124,7 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, scale: Signal<(f64, Vec3, Quater
     rsx! {
         div { class: "sliders-panel",
             div {
-                span { "X scale: " }
+                span { "X rotation: " }
                 input {
                     r#type: "range",
                     min: "0",
@@ -138,7 +138,7 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, scale: Signal<(f64, Vec3, Quater
                 span { "{scale().1[0]}°" }
             }
             div {
-                span { "Y scale: " }
+                span { "Y rotation: " }
                 input {
                     r#type: "range",
                     min: "0",
@@ -153,7 +153,7 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, scale: Signal<(f64, Vec3, Quater
                 span { "{scale().1[1]}°" }
             }
             div {
-                span { "Z scale: " }
+                span { "Z rotation: " }
                 input {
                     r#type: "range",
                     min: "0",
@@ -249,7 +249,7 @@ pub fn FilePanel(
     let save_to_file = move || {
         let save_data = SaveData {
             points: points
-                .read()
+                ()
                 .iter()
                 .map(|point| {
                     (
@@ -260,8 +260,8 @@ pub fn FilePanel(
                     )
                 })
                 .collect(),
-            arcs: arcs.read().clone(),
-            great_circles: great_circles.read().clone(),
+            arcs: arcs().clone(),
+            great_circles: great_circles().clone(),
         };
 
         if let Ok(json) = serde_json::to_string_pretty(&save_data) {
@@ -286,46 +286,46 @@ pub fn FilePanel(
                 .dyn_into::<HtmlInputElement>()
                 .unwrap();
     
-            if let Some(file) = input.files().and_then(|f| f.get(0)) {
-                let reader = FileReader::new().unwrap();
+            // if let Some(file) = input.files().and_then(|f| f.get(0)) {
+            //     let reader = FileReader::new().unwrap();
     
-                let onload = Closure::wrap(Box::new(move |event: web_sys::Event| {
-                    let reader: FileReader = event.target().unwrap().dyn_into().unwrap();
+            //     let onload = Closure::wrap(Box::new(move |event: web_sys::Event| {
+            //         let reader: FileReader = event.target().unwrap().dyn_into().unwrap();
     
-                    let Ok(result) = reader.result() else {return;};
-                    let Some(text) = result.as_string() else {return;};
-                    if let Ok(SaveData {
-                        points: saved_points,
-                        arcs: saved_arcs,
-                        great_circles: saved_great_circles,
-                    }) = serde_json::from_str::<SaveData>(&text)
-                    {
-                        let new_points: Vec<Point> = saved_points
-                            .into_iter()
-                            .enumerate()
-                            .map(|(id, (absolute, name, movable, removable))| {
-                                let mut point = Point::from_vec3(id, absolute);
-                                point.name = name;
-                                point.movable = movable;
-                                point.removable = removable;
-                                point
-                            })
-                            .collect();
+            //         let Ok(result) = reader.result() else {return;};
+            //         let Some(text) = result.as_string() else {return;};
+            //         if let Ok(SaveData {
+            //             points: saved_points,
+            //             arcs: saved_arcs,
+            //             great_circles: saved_great_circles,
+            //         }) = serde_json::from_str::<SaveData>(&text)
+            //         {
+            //             let new_points: Vec<Point> = saved_points
+            //                 .into_iter()
+            //                 .enumerate()
+            //                 .map(|(id, (absolute, name, movable, removable))| {
+            //                     let mut point = Point::from_vec3(id, absolute);
+            //                     point.name = name;
+            //                     point.movable = movable;
+            //                     point.removable = removable;
+            //                     point
+            //                 })
+            //                 .collect();
 
-                        // points.set(new_points);
-                        // arcs.set(saved_arcs);
-                        // great_circles.set(saved_great_circles);
+            //             // points.set(new_points);
+            //             // arcs.set(saved_arcs);
+            //             // great_circles.set(saved_great_circles);
 
-                        web_sys::console::log_1(&format!("File loaded successfully : {new_points:?} :: {saved_arcs:?} :: {saved_great_circles:?}").into());
-                    } else {
-                        web_sys::console::log_1(&"Failed to parse JSON".into());
-                    }
-                }) as Box<dyn FnMut(_)>);
+            //             web_sys::console::log_1(&format!("File loaded successfully : {new_points:?} :: {saved_arcs:?} :: {saved_great_circles:?}").into());
+            //         } else {
+            //             web_sys::console::log_1(&"Failed to parse JSON".into());
+            //         }
+            //     }) as Box<dyn FnMut(_)>);
     
-                reader.set_onload(Some(onload.as_ref().unchecked_ref()));
-                reader.read_as_text(&file).unwrap();
-                onload.forget();
-            }
+            //     reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+            //     reader_as_text(&file).unwrap();
+            //     onload.forget();
+            // }
         }
     };
 

@@ -75,6 +75,19 @@ impl Point {
     pub fn name(&mut self, name: String) {
         self.name = name;
     }
+
+    pub fn new_inverted(&self, id: usize) -> Self {
+        Point {
+            id,
+            absolute: [-self.absolute[0], -self.absolute[1], -self.absolute[2]],
+            rotated: [-self.rotated[0], -self.rotated[1], -self.rotated[2]],
+            abs_polar: vec3_to_polar([-self.absolute[0], -self.absolute[1], -self.absolute[2]]),
+            rot_polar: vec3_to_polar([-self.rotated[0], -self.rotated[1], -self.rotated[2]]),
+            name: String::new(),
+            movable: true,
+            removable: true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
