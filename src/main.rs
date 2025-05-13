@@ -29,6 +29,12 @@ fn App() -> Element {
         SlidersPanel { points, scale }
         ModePanel { active_mode }
         SubModePanel { active_mode, points }
+        FilePanel {
+            points,
+            arcs,
+            great_circles,
+            scale,
+        }
         Sphere {
             points,
             arcs,
@@ -344,8 +350,8 @@ fn GreatCircleDrawer(great_circles: Signal<Vec<usize>>, points: Signal<Vec<Point
         let [x, y, z] = pole;
 
         let r2 = (x.powi(2) + y.powi(2)).sqrt();
-        let u = [-y/r2, x / r2, 0.0]; // u = p × (0, 0, 1)
-        let v = [-z*u[1], z*u[0], r2];
+        let u = [-y / r2, x / r2, 0.0]; // u = p × (0, 0, 1)
+        let v = [-z * u[1], z * u[0], r2];
         for i in 0..=steps {
             let theta = i as f64 * std::f64::consts::TAU / steps as f64;
             let point = [

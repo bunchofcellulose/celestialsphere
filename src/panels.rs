@@ -226,3 +226,151 @@ pub fn SubModePanel(active_mode: Signal<Mode>, points: Signal<Vec<Point>>) -> El
 pub fn TrianglePanel() -> Element {
     rsx! {}
 }
+
+use dioxus::web::WebEventExt;
+use serde::{Deserialize, Serialize};
+use web_sys::wasm_bindgen::{closure::Closure, JsCast};
+use web_sys::{window, FileReader, HtmlInputElement, Url};
+
+#[derive(Serialize, Deserialize)]
+struct SaveData {
+    points: Vec<(Vec3, String, bool, bool)>,
+    arcs: Vec<(usize, usize)>,
+    great_circles: Vec<usize>,
+}
+
+#[component]
+pub fn FilePanel(
+    points: Signal<Vec<Point>>,
+    arcs: Signal<Vec<(usize, usize)>>,
+    great_circles: Signal<Vec<usize>>,
+    scale: Signal<(f64, Vec3, Quaternion)>,
+) -> Element {
+    let save_to_file = move || {
+        let save_data = SaveData {
+            points: points
+                .read()
+                .iter()
+                .map(|point| {
+                    (
+                        point.absolute,
+                        point.name.clone(),
+                        point.movable,
+                        point.removable,
+                    )
+                })
+                .collect(),
+            arcs: arcs.read().clone(),
+            great_circles: great_circles.read().clone(),
+        };
+
+        if let Ok(json) = serde_json::to_string_pretty(&save_data) {
+            let blob =
+                web_sys::Blob::new_with_str_sequence(&js_sys::Array::of1(&json.into())).unwrap();
+            let url = Url::create_object_url_with_blob(&blob).unwrap();
+
+            let document = web_sys::window().unwrap().document().unwrap();
+            let a = document.create_element("a").unwrap();
+            a.set_attribute("href", &url).unwrap();
+            a.set_attribute("download", "celestial_data.json").unwrap();
+            a.dyn_ref::<web_sys::HtmlElement>().unwrap().click();
+            Url::revoke_object_url(&url).unwrap();
+        }
+    };
+
+    let load_from_file = {
+        move |event: web_sys::Event| {
+            let input = event
+                .target()
+                .unwrap()
+                .dyn_into::<HtmlInputElement>()
+                .unwrap();
+    
+            if let Some(file) = input.files().and_then(|f| f.get(0)) {
+                let reader = FileReader::new().unwrap();
+    
+                let onload = Closure::wrap(Box::new(move |event: web_sys::Event| {
+                    let reader: FileReader = event.target().unwrap().dyn_into().unwrap();
+    
+                    let Ok(result) = reader.result() else {return;};
+                    let Some(text) = result.as_string() else {return;};
+                    if let Ok(SaveData {
+                        points: saved_points,
+                        arcs: saved_arcs,
+                        great_circles: saved_great_circles,
+                    }) = serde_json::from_str::<SaveData>(&text)
+                    {
+                        let new_points: Vec<Point> = saved_points
+                            .into_iter()
+                            .enumerate()
+                            .map(|(id, (absolute, name, movable, removable))| {
+                                let mut point = Point::from_vec3(id, absolute);
+                                point.name = name;
+                                point.movable = movable;
+                                point.removable = removable;
+                                point
+                            })
+                            .collect();
+
+                        // points.set(new_points);
+                        // arcs.set(saved_arcs);
+                        // great_circles.set(saved_great_circles);
+
+                        web_sys::console::log_1(&format!("File loaded successfully : {new_points:?} :: {saved_arcs:?} :: {saved_great_circles:?}").into());
+                    } else {
+                        web_sys::console::log_1(&"Failed to parse JSON".into());
+                    }
+                }) as Box<dyn FnMut(_)>);
+    
+                reader.set_onload(Some(onload.as_ref().unchecked_ref()));
+                reader.read_as_text(&file).unwrap();
+                onload.forget();
+            }
+        }
+    };
+
+    let mut new_file = move || {
+        points.set(Vec::new());
+        arcs.set(Vec::new());
+        great_circles.set(Vec::new());
+        scale.set((1.0, [0.0, 0.0, 0.0], Quaternion::identity()));
+        web_sys::console::log_1(&"New file created".into());
+    };
+
+    rsx! {
+        div { class: "file-panel",
+            button {
+                onclick: move |_| save_to_file(),
+                style: "background-image: url({SAVE});",
+            }
+            button {
+                class: "file-load-label",
+                style: "background-image: url({LOAD});",
+                onclick: move |_| {
+                    let input = window()
+                        .unwrap()
+                        .document()
+                        .unwrap()
+                        .get_element_by_id("file-upload")
+                        .unwrap()
+                        .dyn_into::<HtmlInputElement>()
+                        .unwrap();
+                    input.click();
+                },
+                input {
+                    id: "file-upload",
+                    r#type: "file",
+                    accept: ".json",
+                    onchange: move |event| {
+                        load_from_file(event.data().as_web_event());
+                        scale.set((1.0, [0.0, 0.0, 0.0], Quaternion::identity()));
+                    },
+                }
+            }
+            button {
+                onclick: move |_| new_file(),
+                style: "background-image: url({NEW_FILE});",
+            }
+        }
+    }
+}

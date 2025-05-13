@@ -116,3 +116,38 @@ body {
     font-family: monospace;
     z-index: 100;
 }
+
+.file-panel {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    background-color: rgba(0, 0, 0, 0.6);
+    padding: 10px;
+    border-radius: 4px;
+    color: white;
+    font-family: monospace;
+}
+
+.file-panel button,
+.file-panel label {
+    display: flex; /* Ensure the label behaves like a flex container */
+    align-items: center; /* Center the content vertically */
+    justify-content: center; /* Center the content horizontally */
+    width: 40px;
+    height: 40px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-origin: content-box; /* Ensure the background respects padding */
+    background-color: #DDD;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.file-panel input {
+    display: none; /* Hide the input element */
+}

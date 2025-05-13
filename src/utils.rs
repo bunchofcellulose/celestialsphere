@@ -1,10 +1,14 @@
-use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
 use web_sys::window;
-
-pub type Vec3 = [f64; 3];
+use dioxus::prelude::*;
 
 const SELECT: Asset = asset!("/assets/select.ico");
 const TRIANGLE: Asset = asset!("/assets/triangle.ico");
+pub const SAVE: Asset = asset!("/assets/save.ico");
+pub const LOAD: Asset = asset!("/assets/load.ico");
+pub const NEW_FILE: Asset = asset!("/assets/new.ico");
+
+pub type Vec3 = [f64; 3];
 
 #[derive(Debug, Clone)]
 pub enum Selected {
@@ -13,7 +17,7 @@ pub enum Selected {
     None,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Point {
     pub id: usize,
     pub absolute: Vec3,
@@ -82,7 +86,7 @@ pub enum Mode {
 impl Mode {
     pub const MODES: [Mode; 2] = [Mode::Selection, Mode::Triangle];
 
-    pub fn icon(self) -> Asset {
+    pub fn icon(&self) -> Asset {
         match self {
             Mode::Selection => SELECT,
             Mode::Triangle => TRIANGLE,
