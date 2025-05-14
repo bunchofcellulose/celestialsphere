@@ -5,7 +5,7 @@ mod utils;
 use panels::*;
 use utils::*;
 
-const FAVICON: Asset = asset!("/assets/favicon.ico");
+const FAVICON: Asset = asset!("/assets/triangle.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 fn main() {
@@ -16,32 +16,30 @@ fn main() {
 fn App() -> Element {
     let points = use_signal(Vec::<Point>::new); // points on the sphere
     let arcs = use_signal(Vec::<(usize, usize)>::new); // id of the two points at the end of arc
-    let great_circles = use_signal(Vec::<usize>::new); // Stores indices of points that are poles of great circles
-    let selected_point = use_signal(|| None::<usize>); // id of selected point
+    let great_circles = use_signal(Vec::<GreatCircle>::new); // Stores indices of points that are poles of great circles
     let scale = use_signal(|| (1.0, [0.0, 0.0, 0.0], Quaternion::identity())); // zoom, rotation vec3, quaternion
-    let active_mode = use_signal(|| Mode::Selection); // current mode of the application
+    let state = use_signal(State::initialize); // state of the application
 
     rsx! {
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
-        SelectionBox { points, selected_point }
+        SelectionBox { points, state }
         SlidersPanel { points, scale }
-        ModePanel { active_mode }
-        SubModePanel { active_mode, points }
+        LeftPanel { state, points, great_circles }
         FilePanel {
             points,
             arcs,
             great_circles,
             scale,
+            state,
         }
         Sphere {
             points,
             arcs,
             great_circles,
-            selected_point,
+            state,
             scale,
-            active_mode,
         }
     }
 }
@@ -50,10 +48,9 @@ fn App() -> Element {
 pub fn Sphere(
     points: Signal<Vec<Point>>,
     arcs: Signal<Vec<(usize, usize)>>,
-    great_circles: Signal<Vec<usize>>,
-    selected_point: Signal<Option<usize>>,
+    great_circles: Signal<Vec<GreatCircle>>,
+    state: Signal<State>,
     scale: Signal<(f64, Vec3, Quaternion)>,
-    active_mode: Signal<Mode>,
 ) -> Element {
     let mut dragged_point = use_signal(|| None::<usize>); // id of the point being dragged
 
@@ -80,52 +77,48 @@ pub fn Sphere(
         ))
     };
 
-    let mut primary_click_selection = move |event: Event<MouseData>| match select_point(
-        event.client_coordinates().x,
-        event.client_coordinates().y,
-    ) {
-        Selected::None => (),
-        Selected::New(point) => {
-            points.write().push(point);
-            selected_point.set(Some(points.len() - 1));
-        }
-        Selected::Existing(selected) => {
-            if Some(selected) == selected_point() {
-                selected_point.set(None);
-                dragged_point.set(None);
-            } else {
-                selected_point.set(Some(selected));
-                if points()[selected].movable {
+    let mut primary_click = move |event: Event<MouseData>| {
+        let multi = event.modifiers().shift();
+        match select_point(event.client_coordinates().x, event.client_coordinates().y) {
+            Selected::None => (),
+            Selected::New(point) => {
+                points.write().push(point);
+                state.write().toggle_select(multi, points.len() - 1);
+            }
+            Selected::Existing(selected) => {
+                if state.write().toggle_select(multi, selected) && points()[selected].movable {
                     dragged_point.set(Some(selected));
                 }
             }
         }
     };
 
-    let mut secondary_click_selection = move |event: Event<MouseData>| {
-        let Some(selected) = selected_point() else {
+    let mut secondary_click = move |event: Event<MouseData>| {
+        if state.read().selected().is_empty() {
             return;
-        };
+        }
 
         match select_point(event.client_coordinates().x, event.client_coordinates().y) {
             Selected::None => (),
             Selected::New(_) => {}
             Selected::Existing(p) => {
-                if p == selected {
-                    return;
-                }
-                if arcs().contains(&(selected, p)) {
-                    arcs.write().retain(|&(p1, p2)| p1 != selected || p2 != p);
-                } else if arcs().contains(&(p, selected)) {
-                    arcs.write().retain(|&(p1, p2)| p1 != p || p2 != selected);
-                } else {
-                    arcs.write().push((selected, p));
+                for &selected in state.read().selected() {
+                    if p == selected {
+                        continue;
+                    }
+                    if arcs().contains(&(selected, p)) {
+                        arcs.write().retain(|&(p1, p2)| p1 != selected || p2 != p);
+                    } else if arcs().contains(&(p, selected)) {
+                        arcs.write().retain(|&(p1, p2)| p1 != p || p2 != selected);
+                    } else {
+                        arcs.write().push((selected, p));
+                    }
                 }
             }
         }
     };
 
-    let mut mouse_move_selection = move |event: Event<MouseData>| {
+    let mouse_move = move |event: Event<MouseData>| {
         if let Some(dragged_idx) = dragged_point() {
             let viewport_x = event.client_coordinates().x;
             let viewport_y = event.client_coordinates().y;
@@ -134,19 +127,18 @@ pub fn Sphere(
                 return;
             }
             points.write()[dragged_idx].move_to([px, py, pz], scale().2);
-            if Some(dragged_idx) != selected_point() {
-                selected_point.set(Some(dragged_idx));
-            }
+            state.write().select(dragged_idx);
         }
     };
 
-    let mut mouse_up_selection = move |_event: Event<MouseData>| {
+    let mouse_up = move |_event: Event<MouseData>| {
         dragged_point.set(None);
     };
 
-    let mut key_event_selection = move |event: Event<KeyboardData>| {
+    let key_event = move |event: Event<KeyboardData>| {
         event.prevent_default();
-        if let Some(i) = selected_point() {
+        let mut s = state.write();
+        for i in s.selected().to_vec() {
             match event.key() {
                 Key::Delete => {
                     if !points()[i].removable {
@@ -157,7 +149,7 @@ pub fn Sphere(
                         p.id = i;
                     }
                     arcs.write().retain(|&(p1, p2)| p1 != i && p2 != i);
-                    great_circles.write().retain(|&x| x != i);
+                    great_circles.write().retain(|x| x.pole != i);
                     arcs.write().iter_mut().for_each(|(p1, p2)| {
                         if *p1 == points.len() {
                             *p1 = i;
@@ -167,20 +159,20 @@ pub fn Sphere(
                         }
                     });
                     great_circles.write().iter_mut().for_each(|x| {
-                        if *x == points.len() {
-                            *x = i;
+                        if x.pole == points.len() {
+                            x.pole = i;
                         }
                     });
-                    selected_point.set(None);
+                    s.clear_selection();
                 }
                 Key::Escape => {
-                    selected_point.set(None);
+                    s.clear_selection();
                 }
                 Key::Character(ref c) if c.as_str() == "." => {
-                    if !great_circles().contains(&i) {
-                        great_circles.write().push(i);
+                    if great_circles().iter().all(|x| x.pole != i) {
+                        great_circles.write().push(GreatCircle::new(i));
                     } else {
-                        great_circles.write().retain(|&x| x != i);
+                        great_circles.write().retain(|x| x.pole != i);
                     }
                 }
                 Key::Character(ref c) if c.as_str() == "," => {
@@ -201,24 +193,9 @@ pub fn Sphere(
     rsx! {
         div {
             id: "sphere",
-            onkeydown: move |event| {
-                match active_mode() {
-                    Mode::Selection => key_event_selection(event),
-                    Mode::Triangle => {}
-                }
-            },
-            onmousemove: move |event| {
-                match active_mode() {
-                    Mode::Selection => mouse_move_selection(event),
-                    Mode::Triangle => {}
-                }
-            },
-            onmouseup: move |event| {
-                match active_mode() {
-                    Mode::Selection => mouse_up_selection(event),
-                    Mode::Triangle => {}
-                }
-            },
+            onkeydown: key_event,
+            onmousemove: mouse_move,
+            onmouseup: mouse_up,
             tabindex: "0",
             style: "outline: none;",
             div {
@@ -226,15 +203,10 @@ pub fn Sphere(
                     event.prevent_default();
                 },
                 onmousedown: move |event| {
-                    match active_mode() {
-                        Mode::Selection => {
-                            match event.trigger_button() {
-                                Some(MouseButton::Primary) => primary_click_selection(event),
-                                Some(MouseButton::Secondary) => secondary_click_selection(event),
-                                _ => {}
-                            }
-                        }
-                        Mode::Triangle => {}
+                    match event.trigger_button() {
+                        Some(MouseButton::Primary) => primary_click(event),
+                        Some(MouseButton::Secondary) => secondary_click(event),
+                        _ => {}
                     }
                 },
                 svg {
@@ -258,7 +230,7 @@ pub fn Sphere(
                         .map(|point| {
                             let [x, y, z] = point.rotated;
                             let opacity = if z > 0.0 { 1.0 } else { 0.4 };
-                            let r = if Some(point.id) == selected_point() { 1.0 } else { 0.6 };
+                            let r = if state.read().selected().contains(&point.id) { 1.0 } else { 0.6 };
                             (point.id, x * 25.0 + 50.0, y * 25.0 + 50.0, z, r, opacity, &point.name)
                         })
                     {
@@ -290,19 +262,21 @@ pub fn Sphere(
 #[component]
 fn ArcDrawer(arcs: Signal<Vec<(usize, usize)>>, points: Signal<Vec<Point>>) -> Element {
     // Function to calculate the great circle arc points
-    let calculate_great_circle_arc = |mut p1: Vec3, p2: Vec3| -> Vec<Vec3> {
+    let calculate_great_circle_arc = |p1: Vec3, p2: Vec3| -> Vec<Vec3> {
         let mut arc_points = Vec::new();
-        let mut pq = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
-        if pq.powi(2) > 0.9999 {
-            p1[0] += 0.001;
-            pq = p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2];
-        }
-        let r = (1.0 - pq.powi(2)).sqrt();
-        let z = [
-           ( p2[0] - p1[0] * pq) / r,
-            ( p2[1] - p1[1] * pq) / r,
-            ( p2[2] - p1[2] * pq) / r,
-        ];
+        let pq = (p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2]).clamp(-1.0, 1.0);
+
+        let z = if pq.abs() > 1.0 - 1e-5 {
+            let r = (p1[0].powi(2) + p1[1].powi(2)).sqrt();
+            [-p1[1] / r, p1[0] / r, 0.0]
+        } else {
+            let r = (1.0 - pq.powi(2)).sqrt();
+            [
+                (p2[0] - p1[0] * pq) / r,
+                (p2[1] - p1[1] * pq) / r,
+                (p2[2] - p1[2] * pq) / r,
+            ]
+        };
         let t = pq.acos();
         let steps = 200; // Number of points along the arc
         for i in 0..=steps {
@@ -365,7 +339,7 @@ fn ArcDrawer(arcs: Signal<Vec<(usize, usize)>>, points: Signal<Vec<Point>>) -> E
 }
 
 #[component]
-fn GreatCircleDrawer(great_circles: Signal<Vec<usize>>, points: Signal<Vec<Point>>) -> Element {
+fn GreatCircleDrawer(great_circles: Signal<Vec<GreatCircle>>, points: Signal<Vec<Point>>) -> Element {
     let calculate_great_circle = |pole: Vec3| -> Vec<Vec3> {
         let mut circle_points = Vec::new();
         let steps = 200; // Number of points along the great circle
@@ -389,8 +363,8 @@ fn GreatCircleDrawer(great_circles: Signal<Vec<usize>>, points: Signal<Vec<Point
     rsx! {
         for (front_path_data , back_path_data) in great_circles()
             .iter()
-            .map(|&pole_idx| {
-                let pole = points()[pole_idx].rotated;
+            .map(|gc| {
+                let pole = points()[gc.pole].rotated;
                 let circle_points = calculate_great_circle(pole);
                 let mut front_path = Vec::new();
                 let mut back_path = Vec::new();

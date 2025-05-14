@@ -1,109 +1,59 @@
 use crate::*;
 
 #[component]
-pub fn SelectionBox(points: Signal<Vec<Point>>, selected_point: Signal<Option<usize>>) -> Element {
-    let Some(i) = selected_point() else {
-        return rsx! {};
-    };
-    let [x, y, z] = points()[i].absolute;
-    let [rx, ry, rz] = points()[i].rotated;
-    let [theta, phi] = points()[i].abs_polar;
-    let [rtheta, rphi] = points()[i].rot_polar;
-    let name = &points()[i].name;
-    let movable = points()[i].movable;
-    let removable = points()[i].removable;
-
+pub fn SelectionBox(points: Signal<Vec<Point>>, state: Signal<State>) -> Element {
     rsx! {
-        div { class: "selection-box",
-            "Absolute Coordinates:"
-            br {}
-            "x: {x:.2}, y: {-y:.2}, z: {z:.2}"
-            br {}
-            "θ: {-theta:.2}, φ: {phi:.2}°"
-            br {}
-            br {}
-            "Rotated Frame Coordinates:"
-            br {}
-            "x: {rx:.2}, y: {-ry:.2}, z: {rz:.2}"
-            br {}
-            "θ: {-rtheta:.2}, φ: {rphi:.2}"
-            br {}
-            br {}
-            "ID: {i}"
-            br {}
-            "Name: {name}"
-            br {}
-            div {
-                input {
-                    r#type: "checkbox",
-                    checked: "{movable}",
-                    onchange: move |event| {
-                        match event.value().as_str() {
-                            "true" => points.write()[i].movable = true,
-                            "false" => points.write()[i].movable = false,
-                            a => panic!("{a}"),
+        div { class: "right-info-boxes-container",
+            for Point { id , absolute : [x , y , z] , name , movable , removable , abs_polar : [theta , phi] , rotated : [rx , ry , rz] , rot_polar : [rtheta , rphi] } in state.read().selected().iter().map(|&i| points()[i].clone()) {
+                div { class: "info-box",
+                    "Absolute Coordinates:"
+                    br {}
+                    "x: {x:.2}, y: {-y:.2}, z: {z:.2}"
+                    br {}
+                    "θ: {-theta:.2}, φ: {phi:.2}°"
+                    br {}
+                    br {}
+                    "Rotated Frame Coordinates:"
+                    br {}
+                    "x: {rx:.2}, y: {-ry:.2}, z: {rz:.2}"
+                    br {}
+                    "θ: {-rtheta:.2}, φ: {rphi:.2}"
+                    br {}
+                    br {}
+                    "ID: {id}"
+                    br {}
+                    "Name: {name}"
+                    br {}
+                    div {
+                        input {
+                            r#type: "checkbox",
+                            checked: "{movable}",
+                            onchange: move |event| {
+                                match event.value().as_str() {
+                                    "true" => points.write()[id].movable = true,
+                                    "false" => points.write()[id].movable = false,
+                                    a => panic!("{a}"),
+                                }
+                            },
                         }
-                    },
-                }
-                span { "Movable" }
-            }
-            div {
-                input {
-                    r#type: "checkbox",
-                    checked: "{removable}",
-                    onchange: move |event| {
-                        match event.value().as_str() {
-                            "true" => points.write()[i].removable = true,
-                            "false" => points.write()[i].removable = false,
-                            a => panic!("{a}"),
+                        span { "Movable" }
+                    }
+                    div {
+                        input {
+                            r#type: "checkbox",
+                            checked: "{removable}",
+                            onchange: move |event| {
+                                match event.value().as_str() {
+                                    "true" => points.write()[id].removable = true,
+                                    "false" => points.write()[id].removable = false,
+                                    a => panic!("{a}"),
+                                }
+                            },
                         }
-                    },
+                        span { "Removable" }
+                    }
                 }
-                span { "Removable" }
             }
-        }
-    }
-}
-
-#[component]
-pub fn TriangleInfoBox(points: Signal<Vec<Point>>) -> Element {
-    if points().len() < 3 {
-        return rsx! {}; // Do not display if there are fewer than 3 points
-    }
-
-    // Get the last three points
-    let len = points().len();
-    let p1 = points()[len - 3].absolute;
-    let p2 = points()[len - 2].absolute;
-    let p3 = points()[len - 1].absolute;
-
-    // Function to calculate the angular distance between two points on a sphere
-    let angular_distance = |a: Vec3, b: Vec3| -> f64 {
-        let dot_product = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-        dot_product.acos()
-    };
-
-    // Calculate the lengths of the sides
-    let a = angular_distance(p2, p3);
-    let b = angular_distance(p1, p3);
-    let c = angular_distance(p1, p2);
-
-    // Calculate the angles of the triangle using the spherical law of cosines
-    let angle_a = ((-b.cos() * c.cos() + a.cos()) / (b.sin() * c.sin())).acos();
-    let angle_b = ((-a.cos() * c.cos() + b.cos()) / (a.sin() * c.sin())).acos();
-    let angle_c = ((-a.cos() * b.cos() + c.cos()) / (a.sin() * b.sin())).acos();
-
-    rsx! {
-        div { class: "triangle-info-box",
-            "Spherical Triangle Information:"
-            br {}
-            "Sides:"
-            br {}
-            "a: {a.to_degrees():.2}°, b: {b.to_degrees():.2}°, c: {c.to_degrees():.2}°"
-            br {}
-            "Angles:"
-            br {}
-            "A: {angle_a.to_degrees():.2}°, B: {angle_b.to_degrees():.2}°, C: {angle_c.to_degrees():.2}°"
         }
     }
 }
@@ -186,51 +136,92 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, scale: Signal<(f64, Vec3, Quater
 }
 
 #[component]
-pub fn ModePanel(active_mode: Signal<Mode>) -> Element {
+pub fn LeftPanel(
+    state: Signal<State>,
+    points: Signal<Vec<Point>>,
+    great_circles: Signal<Vec<GreatCircle>>,
+) -> Element {
     rsx! {
-        div { class: "mode-panel",
-            for (mode , icon , color) in Mode::MODES
-                .iter()
-                .map(|&mode| {
-                    (
-                        mode,
-                        mode.icon(),
-                        if mode == active_mode() { "active" } else { "inactive" },
-                    )
-                })
+        div { class: "left-info-boxes-container",
             {
-                button {
-                    class: "{color}",
-                    style: "background-image: url({icon});",
-                    onclick: move |_| {
-                        active_mode.set(mode);
-                    },
+                if let &[pole] = state.read().selected() {
+                    if let Some(&GreatCircle { ref name, divisions, .. }) = great_circles()
+                        .iter()
+                        .find(|gc| gc.pole == pole)
+                    {
+                        rsx! {
+                            div { class: "info-box",
+                                h3 { "Great Circle" }
+                                "Pole ID: {pole}"
+                                br {}
+                                "Name: {name}"
+                                br {}
+                                div {
+                                    input {
+                                        r#type: "checkbox",
+                                        checked: "{divisions}",
+                                        onchange: move |event| {
+                                            match event.value().as_str() {
+                                                "true" => great_circles.write()[pole].divisions = true,
+                                                "false" => great_circles.write()[pole].divisions = false,
+                                                a => panic!("{a}"),
+                                            }
+                                        },
+                                    }
+                                    span { "Divisions" }
+                                }
+                            }
+                        }
+                    } else {
+                        rsx! {}
+                    }
+                } else if let &[a, b, c] = state.read().selected() {
+                    let a_pos = points()[a].absolute;
+                    let b_pos = points()[b].absolute;
+                    let c_pos = points()[c].absolute;
+                    let side_a = arc_distance(b_pos, c_pos);
+                    let side_b = arc_distance(a_pos, c_pos);
+                    let side_c = arc_distance(a_pos, b_pos);
+                    let [angle_a, angle_b, angle_c] = calculate_angle(side_a, side_b, side_c);
+                    let side_a = side_a.to_degrees();
+                    let side_b = side_b.to_degrees();
+                    let side_c = side_c.to_degrees();
+                    let angle_a = angle_a.to_degrees();
+                    let angle_b = angle_b.to_degrees();
+                    let angle_c = angle_c.to_degrees();
+                    let area = angle_a + angle_b + angle_c - 180.0;
+                    rsx! {
+                        div { class: "info-box",
+                            h3 { "Spherical Triangle" }
+                            "Side a: {side_a:.4}°"
+                            br {}
+                            "Side b: {side_b:.4}°"
+                            br {}
+                            "Side c: {side_c:.4}°"
+                            br {}
+                            br {}
+                            "Angle A: {angle_a:.4}°"
+                            br {}
+                            "Angle B: {angle_b:.4}°"
+                            br {}
+                            "Angle C: {angle_c:.4}°"
+                            br {}
+                            br {}
+                            "Spherical Excess: {area:.4}°"
+                        }
+                    }
+                } else {
+                    rsx! {}
                 }
             }
         }
     }
 }
 
-#[component]
-pub fn SubModePanel(active_mode: Signal<Mode>, points: Signal<Vec<Point>>) -> Element {
-    match active_mode() {
-        Mode::Selection => rsx! {},
-        Mode::Triangle => rsx! {
-            div { class: "left-panel", TrianglePanel {} }
-            TriangleInfoBox { points }
-        },
-    }
-}
-
-#[component]
-pub fn TrianglePanel() -> Element {
-    rsx! {}
-}
-
 use dioxus::web::WebEventExt;
 use serde::{Deserialize, Serialize};
-use web_sys::wasm_bindgen::{closure::Closure, JsCast};
-use web_sys::{window, FileReader, HtmlInputElement, Url};
+use web_sys::wasm_bindgen::JsCast;
+use web_sys::{window, HtmlInputElement, Url};
 
 #[derive(Serialize, Deserialize)]
 struct SaveData {
@@ -243,13 +234,13 @@ struct SaveData {
 pub fn FilePanel(
     points: Signal<Vec<Point>>,
     arcs: Signal<Vec<(usize, usize)>>,
-    great_circles: Signal<Vec<usize>>,
+    great_circles: Signal<Vec<GreatCircle>>,
     scale: Signal<(f64, Vec3, Quaternion)>,
+    state: Signal<State>,
 ) -> Element {
     let save_to_file = move || {
         let save_data = SaveData {
-            points: points
-                ()
+            points: points()
                 .iter()
                 .map(|point| {
                     (
@@ -261,7 +252,7 @@ pub fn FilePanel(
                 })
                 .collect(),
             arcs: arcs().clone(),
-            great_circles: great_circles().clone(),
+            great_circles: great_circles().iter().map(|gc| gc.pole).collect(),
         };
 
         if let Ok(json) = serde_json::to_string_pretty(&save_data) {
@@ -285,47 +276,8 @@ pub fn FilePanel(
                 .unwrap()
                 .dyn_into::<HtmlInputElement>()
                 .unwrap();
-    
-            // if let Some(file) = input.files().and_then(|f| f.get(0)) {
-            //     let reader = FileReader::new().unwrap();
-    
-            //     let onload = Closure::wrap(Box::new(move |event: web_sys::Event| {
-            //         let reader: FileReader = event.target().unwrap().dyn_into().unwrap();
-    
-            //         let Ok(result) = reader.result() else {return;};
-            //         let Some(text) = result.as_string() else {return;};
-            //         if let Ok(SaveData {
-            //             points: saved_points,
-            //             arcs: saved_arcs,
-            //             great_circles: saved_great_circles,
-            //         }) = serde_json::from_str::<SaveData>(&text)
-            //         {
-            //             let new_points: Vec<Point> = saved_points
-            //                 .into_iter()
-            //                 .enumerate()
-            //                 .map(|(id, (absolute, name, movable, removable))| {
-            //                     let mut point = Point::from_vec3(id, absolute);
-            //                     point.name = name;
-            //                     point.movable = movable;
-            //                     point.removable = removable;
-            //                     point
-            //                 })
-            //                 .collect();
 
-            //             // points.set(new_points);
-            //             // arcs.set(saved_arcs);
-            //             // great_circles.set(saved_great_circles);
-
-            //             web_sys::console::log_1(&format!("File loaded successfully : {new_points:?} :: {saved_arcs:?} :: {saved_great_circles:?}").into());
-            //         } else {
-            //             web_sys::console::log_1(&"Failed to parse JSON".into());
-            //         }
-            //     }) as Box<dyn FnMut(_)>);
-    
-            //     reader.set_onload(Some(onload.as_ref().unchecked_ref()));
-            //     reader_as_text(&file).unwrap();
-            //     onload.forget();
-            // }
+            todo!("{input:?}");
         }
     };
 
@@ -334,6 +286,7 @@ pub fn FilePanel(
         arcs.set(Vec::new());
         great_circles.set(Vec::new());
         scale.set((1.0, [0.0, 0.0, 0.0], Quaternion::identity()));
+        state.write().clear_selection();
         web_sys::console::log_1(&"New file created".into());
     };
 

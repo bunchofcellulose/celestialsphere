@@ -1,9 +1,7 @@
+use dioxus::prelude::*;
 use serde::{Deserialize, Serialize};
 use web_sys::window;
-use dioxus::prelude::*;
 
-const SELECT: Asset = asset!("/assets/select.ico");
-const TRIANGLE: Asset = asset!("/assets/triangle.ico");
 pub const SAVE: Asset = asset!("/assets/save.ico");
 pub const LOAD: Asset = asset!("/assets/load.ico");
 pub const NEW_FILE: Asset = asset!("/assets/new.ico");
@@ -17,7 +15,7 @@ pub enum Selected {
     None,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct Point {
     pub id: usize,
     pub absolute: Vec3,
@@ -27,6 +25,23 @@ pub struct Point {
     pub name: String,
     pub movable: bool,
     pub removable: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct GreatCircle {
+    pub pole: usize,
+    pub divisions: bool,
+    pub name: String
+}
+
+impl GreatCircle {
+    pub fn new(pole: usize) -> Self {
+        GreatCircle {
+            pole,
+            divisions: false,
+            name: String::new(),
+        }
+    }
 }
 
 impl Point {
@@ -90,19 +105,100 @@ impl Point {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Mode {
-    Selection,
-    Triangle,
+pub fn arc_distance(a: Vec3, b: Vec3) -> f64 {
+    let dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    let dot = dot.clamp(-1.0, 1.0);
+    dot.acos()
 }
 
-impl Mode {
-    pub const MODES: [Mode; 2] = [Mode::Selection, Mode::Triangle];
+pub fn calculate_angle(a: f64, b: f64, c: f64) -> [f64; 3] {
+    let cos_a = a.cos();
+    let cos_b = b.cos();
+    let cos_c = c.cos();
+    let sin_a = a.sin();
+    let sin_b = b.sin();
+    let sin_c = c.sin();
+    
+    // Use the spherical Law of Cosines for angles
+    // cos(A) = (cos(a) - cos(b)cos(c)) / (sin(b)sin(c))
+    
+    // Handle potential divisions by zero
+    let epsilon = 1e-10;
+    
+    // Calculate angle A
+    let cos_angle_a = if sin_b.abs() < epsilon || sin_c.abs() < epsilon {
+        1.0  // If sides are very small, angle approaches 0
+    } else {
+        (cos_a - cos_b * cos_c) / (sin_b * sin_c)
+    };
+    
+    // Calculate angle B
+    let cos_angle_b = if sin_a.abs() < epsilon || sin_c.abs() < epsilon {
+        1.0
+    } else {
+        (cos_b - cos_a * cos_c) / (sin_a * sin_c)
+    };
+    
+    // Calculate angle C
+    let cos_angle_c = if sin_a.abs() < epsilon || sin_b.abs() < epsilon {
+        1.0
+    } else {
+        (cos_c - cos_a * cos_b) / (sin_a * sin_b)
+    };
+    
+    // Clamp values to handle floating point errors and take inverse cosine
+    [
+        cos_angle_a.clamp(-1.0, 1.0).acos(),
+        cos_angle_b.clamp(-1.0, 1.0).acos(),
+        cos_angle_c.clamp(-1.0, 1.0).acos()
+    ]
+}
 
-    pub fn icon(&self) -> Asset {
-        match self {
-            Mode::Selection => SELECT,
-            Mode::Triangle => TRIANGLE,
+
+pub struct State {
+    selected: Vec<usize>,
+}
+
+impl State {
+    pub fn initialize() -> Self {
+        Self {
+            selected: vec![],
+        }
+    }
+
+    pub fn selected(&self) -> &[usize] {
+        self.selected.as_slice()
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selected.clear();
+    }
+
+    pub fn toggle_select(&mut self, multi: bool, id: usize) -> bool {
+        if multi {
+            if self.selected.contains(&id) {
+                self.selected.retain(|&x| x != id);
+                false
+            } else {
+                self.selected.push(id);
+                true
+            }
+        } else if self.selected.len() == 1 && self.selected[0] == id {
+            self.selected.clear();
+            false
+        } else {
+            self.selected.clear();
+            self.selected.push(id);
+            true
+        }
+    }
+
+    pub fn select(&mut self, id: usize) -> bool {
+        if self.selected.contains(&id) {
+            false
+        } else {
+            self.selected.push(id);
+            true
         }
     }
 }

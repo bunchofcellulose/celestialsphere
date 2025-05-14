@@ -6,19 +6,41 @@ body {
     margin: 20px;
 }
 
-.selection-box {
+.right-info-boxes-container {
     position: absolute;
     top: 20px;
     right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.left-info-boxes-container {
+    position: absolute;
+    top: 200px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.info-box {
+    position: relative;
     padding: 8px;
     background-color: rgba(0, 0, 0, 0.6);
     color: white;
     border-radius: 4px;
     font-family: monospace;
-    z-index: 100;
+    width: 280px;
 }
 
-.selection-box div {
+.info-box div {
     display: flex;
     align-items: center;
     gap: 5px;
@@ -43,78 +65,6 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
-}
-
-/* ModePanel styles */
-.mode-panel {
-    position: absolute;
-    top: 200px;
-    left: 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    background-color: rgba(0, 0, 0, 0.6);
-    padding: 10px;
-    border-radius: 4px;
-    color: white;
-    font-family: monospace;
-}
-
-.mode-panel button {
-    width: 50px;
-    height: 50px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-/* Active and inactive button colors */
-.mode-panel button.active {
-    background-color: #CCC;
-}
-
-.mode-panel button.inactive {
-    background-color: #666;
-}
-
-.left-panel div {
-    position: absolute;
-    top: 250px; /* Same vertical position as the mode panel */
-    right: 20px; /* Align with the right side of the screen */
-    display: flex;
-    flex-direction: column; /* Arrange buttons vertically */
-    gap: 10px; /* Add spacing between buttons */
-    background-color: rgba(0, 0, 0, 0.6);
-    padding: 10px;
-    border-radius: 4px;
-    color: white;
-    font-family: monospace;
-}
-
-.left-panel button {
-    width: 40px;
-    height: 40px;
-    background-color: #888;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.triangle-info-box {
-    position: absolute;
-    top: 250px; /* Adjust this to position it below the SelectionBox */
-    right: 20px;
-    background-color: rgba(0, 0, 0, 0.6);
-    padding: 10px;
-    border-radius: 4px;
-    color: white;
-    font-family: monospace;
-    z-index: 100;
 }
 
 .file-panel {
