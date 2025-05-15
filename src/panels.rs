@@ -59,13 +59,33 @@ pub fn SelectionBox(points: Signal<Vec<Point>>, state: Signal<State>) -> Element
 }
 
 #[component]
-pub fn SlidersPanel(points: Signal<Vec<Point>>, scale: Signal<(f64, Vec3, Quaternion)>) -> Element {
+pub fn GitHubIcon() -> Element {
+    rsx! {
+        a {
+            href: "https://github.com/Bunch-of-cells/celestialsphere",
+            target: "_blank",
+            rel: "noopener noreferrer",
+            class: "github-icon",
+            title: "View on GitHub",
+            svg {
+                width: "40",
+                height: "40",
+                view_box: "0 0 16 16",
+                fill: "white",
+                path { d: "M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" }
+            }
+        }
+    }
+}
+
+#[component]
+pub fn SlidersPanel(
+    points: Signal<Vec<Point>>,
+    scale: Signal<(f64, Vec3, Quaternion)>,
+    show_grid: Signal<bool>,
+) -> Element {
     let mut change = move || {
-        let q = Quaternion::from_euler_angles(
-            scale().1[0].to_radians(),
-            scale().1[1].to_radians(),
-            scale().1[2].to_radians(),
-        );
+        let q = Quaternion::from_euler_deg(scale().1);
         scale.write().2 = q;
         for p in points.write().iter_mut() {
             p.rotate(q);
@@ -85,7 +105,7 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, scale: Signal<(f64, Vec3, Quater
                         change();
                     },
                 }
-                span { "{scale().1[0]}°" }
+                span { "{scale().1[0]:.1}°" }
             }
             div {
                 span { "Y rotation: " }
@@ -100,7 +120,7 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, scale: Signal<(f64, Vec3, Quater
                         change();
                     },
                 }
-                span { "{scale().1[1]}°" }
+                span { "{scale().1[1]:.1}°" }
             }
             div {
                 span { "Z rotation: " }
@@ -115,7 +135,7 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, scale: Signal<(f64, Vec3, Quater
                         change();
                     },
                 }
-                span { "{scale().1[2]}°" }
+                span { "{scale().1[2]:.1}°" }
             }
             div {
                 span { "Zoom: " }
@@ -131,6 +151,17 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, scale: Signal<(f64, Vec3, Quater
                 }
                 span { "{(scale().0 * 100.0).round()}%" }
             }
+            div { class: "checkbox-control",
+                input {
+                    r#type: "checkbox",
+                    id: "grid-toggle",
+                    checked: "{show_grid()}",
+                    onchange: move |evt| {
+                        show_grid.set(evt.value() == "true");
+                    },
+                }
+                label { r#for: "grid-toggle", "Show coordinate grid" }
+            }
         }
     }
 }
@@ -145,31 +176,13 @@ pub fn LeftPanel(
         div { class: "left-info-boxes-container",
             {
                 if let &[pole] = state.read().selected() {
-                    if let Some(&GreatCircle { ref name, divisions, .. }) = great_circles()
-                        .iter()
-                        .find(|gc| gc.pole == pole)
-                    {
+                    if let Some(gc) = great_circles().iter().find(|gc| gc.pole == pole) {
                         rsx! {
                             div { class: "info-box",
                                 h3 { "Great Circle" }
                                 "Pole ID: {pole}"
                                 br {}
-                                "Name: {name}"
-                                br {}
-                                div {
-                                    input {
-                                        r#type: "checkbox",
-                                        checked: "{divisions}",
-                                        onchange: move |event| {
-                                            match event.value().as_str() {
-                                                "true" => great_circles.write()[pole].divisions = true,
-                                                "false" => great_circles.write()[pole].divisions = false,
-                                                a => panic!("{a}"),
-                                            }
-                                        },
-                                    }
-                                    span { "Divisions" }
-                                }
+                                "Name: {gc.name}"
                             }
                         }
                     } else {
@@ -227,7 +240,59 @@ use web_sys::{window, HtmlInputElement, Url};
 struct SaveData {
     points: Vec<(Vec3, String, bool, bool)>,
     arcs: Vec<(usize, usize)>,
-    great_circles: Vec<usize>,
+    great_circles: Vec<(usize, String)>,
+}
+
+pub fn save_to_file(
+    points: Signal<Vec<Point>>,
+    arcs: Signal<Vec<(usize, usize)>>,
+    great_circles: Signal<Vec<GreatCircle>>,
+) {
+    let save_data = SaveData {
+        points: points()
+            .iter()
+            .map(|point| {
+                (
+                    point.absolute,
+                    point.name.clone(),
+                    point.movable,
+                    point.removable,
+                )
+            })
+            .collect(),
+        arcs: arcs().clone(),
+        great_circles: great_circles()
+            .iter()
+            .map(|gc| (gc.pole, gc.name.clone()))
+            .collect(),
+    };
+
+    if let Ok(json) = serde_json::to_string_pretty(&save_data) {
+        let blob = web_sys::Blob::new_with_str_sequence(&js_sys::Array::of1(&json.into())).unwrap();
+        let url = Url::create_object_url_with_blob(&blob).unwrap();
+
+        let document = web_sys::window().unwrap().document().unwrap();
+        let a = document.create_element("a").unwrap();
+        a.set_attribute("href", &url).unwrap();
+        a.set_attribute("download", "celestial_data.json").unwrap();
+        a.dyn_ref::<web_sys::HtmlElement>().unwrap().click();
+        Url::revoke_object_url(&url).unwrap();
+    }
+}
+
+pub fn new_file(
+    mut points: Signal<Vec<Point>>,
+    mut arcs: Signal<Vec<(usize, usize)>>,
+    mut great_circles: Signal<Vec<GreatCircle>>,
+    mut scale: Signal<(f64, Vec3, Quaternion)>,
+    mut state: Signal<State>,
+) {
+    // Reset the state of the application
+    points.set(Vec::new());
+    arcs.set(Vec::new());
+    great_circles.set(Vec::new());
+    scale.set((1.0, [0.0, 0.0, 0.0], Quaternion::identity()));
+    state.write().clear_selection();
 }
 
 #[component]
@@ -238,37 +303,6 @@ pub fn FilePanel(
     scale: Signal<(f64, Vec3, Quaternion)>,
     state: Signal<State>,
 ) -> Element {
-    let save_to_file = move || {
-        let save_data = SaveData {
-            points: points()
-                .iter()
-                .map(|point| {
-                    (
-                        point.absolute,
-                        point.name.clone(),
-                        point.movable,
-                        point.removable,
-                    )
-                })
-                .collect(),
-            arcs: arcs().clone(),
-            great_circles: great_circles().iter().map(|gc| gc.pole).collect(),
-        };
-
-        if let Ok(json) = serde_json::to_string_pretty(&save_data) {
-            let blob =
-                web_sys::Blob::new_with_str_sequence(&js_sys::Array::of1(&json.into())).unwrap();
-            let url = Url::create_object_url_with_blob(&blob).unwrap();
-
-            let document = web_sys::window().unwrap().document().unwrap();
-            let a = document.create_element("a").unwrap();
-            a.set_attribute("href", &url).unwrap();
-            a.set_attribute("download", "celestial_data.json").unwrap();
-            a.dyn_ref::<web_sys::HtmlElement>().unwrap().click();
-            Url::revoke_object_url(&url).unwrap();
-        }
-    };
-
     let load_from_file = {
         move |event: web_sys::Event| {
             let input = event
@@ -281,19 +315,10 @@ pub fn FilePanel(
         }
     };
 
-    let mut new_file = move || {
-        points.set(Vec::new());
-        arcs.set(Vec::new());
-        great_circles.set(Vec::new());
-        scale.set((1.0, [0.0, 0.0, 0.0], Quaternion::identity()));
-        state.write().clear_selection();
-        web_sys::console::log_1(&"New file created".into());
-    };
-
     rsx! {
         div { class: "file-panel",
             button {
-                onclick: move |_| save_to_file(),
+                onclick: move |_| save_to_file(points, arcs, great_circles),
                 style: "background-image: url({SAVE});",
             }
             button {
@@ -321,7 +346,7 @@ pub fn FilePanel(
                 }
             }
             button {
-                onclick: move |_| new_file(),
+                onclick: move |_| new_file(points, arcs, great_circles, scale, state),
                 style: "background-image: url({NEW_FILE});",
             }
         }

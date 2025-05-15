@@ -1,5 +1,4 @@
 use dioxus::prelude::*;
-use serde::{Deserialize, Serialize};
 use web_sys::window;
 
 pub const SAVE: Asset = asset!("/assets/save.ico");
@@ -13,6 +12,20 @@ pub enum Selected {
     Existing(usize),
     New(Point),
     None,
+}
+
+pub fn toggle_case(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if c.is_uppercase() {
+                c.to_lowercase().collect::<String>()
+            } else if c.is_lowercase() {
+                c.to_uppercase().collect::<String>()
+            } else {
+                c.to_string()
+            }
+        })
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -30,15 +43,13 @@ pub struct Point {
 #[derive(Debug, Clone)]
 pub struct GreatCircle {
     pub pole: usize,
-    pub divisions: bool,
-    pub name: String
+    pub name: String,
 }
 
 impl GreatCircle {
     pub fn new(pole: usize) -> Self {
         GreatCircle {
             pole,
-            divisions: false,
             name: String::new(),
         }
     }
@@ -105,6 +116,43 @@ impl Point {
     }
 }
 
+pub fn snap_to_great_circle(
+    point: Vec3,
+    great_circles: &[GreatCircle],
+    points: &[Point],
+    threshold: f64,
+) -> Vec3 {
+    let mut closest_distance = threshold;
+    let mut snapped_point = point;
+
+    // Check each great circle
+    for gc in great_circles {
+        let pole = points[gc.pole].rotated;
+
+        // Distance from point to great circle plane is |dot(point, pole)|
+        let distance = (point[0] * pole[0] + point[1] * pole[1] + point[2] * pole[2]).abs();
+
+        if distance < closest_distance {
+            // Project point onto the plane of the circle (subtract the component along the pole)
+            let dot_product = point[0] * pole[0] + point[1] * pole[1] + point[2] * pole[2];
+            let projected = [
+                point[0] - dot_product * pole[0],
+                point[1] - dot_product * pole[1],
+                point[2] - dot_product * pole[2],
+            ];
+
+            // Normalize to get a point on the sphere
+            let mag = (projected[0].powi(2) + projected[1].powi(2) + projected[2].powi(2)).sqrt();
+            if mag > 1e-10 {
+                snapped_point = [projected[0] / mag, projected[1] / mag, projected[2] / mag];
+                closest_distance = distance;
+            }
+        }
+    }
+
+    snapped_point
+}
+
 pub fn arc_distance(a: Vec3, b: Vec3) -> f64 {
     let dot = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let dot = dot.clamp(-1.0, 1.0);
@@ -118,42 +166,41 @@ pub fn calculate_angle(a: f64, b: f64, c: f64) -> [f64; 3] {
     let sin_a = a.sin();
     let sin_b = b.sin();
     let sin_c = c.sin();
-    
+
     // Use the spherical Law of Cosines for angles
     // cos(A) = (cos(a) - cos(b)cos(c)) / (sin(b)sin(c))
-    
+
     // Handle potential divisions by zero
     let epsilon = 1e-10;
-    
+
     // Calculate angle A
     let cos_angle_a = if sin_b.abs() < epsilon || sin_c.abs() < epsilon {
-        1.0  // If sides are very small, angle approaches 0
+        1.0 // If sides are very small, angle approaches 0
     } else {
         (cos_a - cos_b * cos_c) / (sin_b * sin_c)
     };
-    
+
     // Calculate angle B
     let cos_angle_b = if sin_a.abs() < epsilon || sin_c.abs() < epsilon {
         1.0
     } else {
         (cos_b - cos_a * cos_c) / (sin_a * sin_c)
     };
-    
+
     // Calculate angle C
     let cos_angle_c = if sin_a.abs() < epsilon || sin_b.abs() < epsilon {
         1.0
     } else {
         (cos_c - cos_a * cos_b) / (sin_a * sin_b)
     };
-    
+
     // Clamp values to handle floating point errors and take inverse cosine
     [
         cos_angle_a.clamp(-1.0, 1.0).acos(),
         cos_angle_b.clamp(-1.0, 1.0).acos(),
-        cos_angle_c.clamp(-1.0, 1.0).acos()
+        cos_angle_c.clamp(-1.0, 1.0).acos(),
     ]
 }
-
 
 pub struct State {
     selected: Vec<usize>,
@@ -161,9 +208,7 @@ pub struct State {
 
 impl State {
     pub fn initialize() -> Self {
-        Self {
-            selected: vec![],
-        }
+        Self { selected: vec![] }
     }
 
     pub fn selected(&self) -> &[usize] {
@@ -172,6 +217,10 @@ impl State {
 
     pub fn clear_selection(&mut self) {
         self.selected.clear();
+    }
+
+    pub fn pop_selected(&mut self) -> Option<usize> {
+        self.selected.pop()
     }
 
     pub fn toggle_select(&mut self, multi: bool, id: usize) -> bool {
@@ -212,7 +261,8 @@ pub struct Quaternion {
 }
 
 impl Quaternion {
-    pub fn from_euler_angles(roll: f64, pitch: f64, yaw: f64) -> Self {
+    pub fn from_euler_deg(euler: Vec3) -> Self {
+        let [yaw, pitch, roll] = euler.map(|x| x.to_radians());
         let cr = (roll / 2.0).cos();
         let sr = (roll / 2.0).sin();
         let cp = (pitch / 2.0).cos();
@@ -225,6 +275,30 @@ impl Quaternion {
             x: sr * cp * cy - cr * sp * sy,
             y: cr * sp * cy + sr * cp * sy,
             z: cr * cp * sy - sr * sp * cy,
+        }
+    }
+
+    pub fn from_axis_angle(axis: Vec3, angle: f64) -> Self {
+        // Normalize the axis vector
+        let norm = (axis[0].powi(2) + axis[1].powi(2) + axis[2].powi(2)).sqrt();
+
+        // Handle zero vector case
+        if norm < 1e-10 {
+            return Self::identity();
+        }
+
+        let normalized_axis = [axis[0] / norm, axis[1] / norm, axis[2] / norm];
+
+        // Calculate quaternion components
+        let half_angle = angle * 0.5;
+        let sin_half_angle = half_angle.sin();
+        let cos_half_angle = half_angle.cos();
+
+        Quaternion {
+            w: cos_half_angle,
+            x: normalized_axis[0] * sin_half_angle,
+            y: normalized_axis[1] * sin_half_angle,
+            z: normalized_axis[2] * sin_half_angle,
         }
     }
 
@@ -280,6 +354,22 @@ impl Quaternion {
         };
         let rotated = conjugate.multiply(point_quaternion).multiply(self);
         [rotated.x, rotated.y, rotated.z]
+    }
+
+    pub fn to_euler_deg(self) -> Vec3 {
+        let Quaternion { w, x, y, z } = self;
+
+        // Calculate Euler angles (yaw, pitch, roll) from quaternion
+        let mut yaw = f64::atan2(2.0 * (w * z + x * y), 1.0 - 2.0 * (y * y + z * z)).to_degrees();
+        let mut pitch = f64::asin(2.0 * (w * y - z * x)).to_degrees();
+        let mut roll = f64::atan2(2.0 * (w * x + y * z), 1.0 - 2.0 * (x * x + y * y)).to_degrees();
+
+        // Normalize angles to 0-360 range
+        yaw = (yaw + 360.0) % 360.0;
+        pitch = (pitch + 360.0) % 360.0;
+        roll = (roll + 360.0) % 360.0;
+
+        [yaw, pitch, roll]
     }
 }
 

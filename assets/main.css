@@ -101,3 +101,17 @@ body {
 .file-panel input {
     display: none; /* Hide the input element */
 }
+
+.github-icon {
+    position: absolute;
+    bottom: 100px;
+    left: 30px;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+    display: flex;
+    z-index: 1000;
+}
+
+.github-icon:hover {
+    opacity: 1;
+}

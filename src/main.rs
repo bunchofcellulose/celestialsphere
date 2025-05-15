@@ -1,7 +1,9 @@
 use dioxus::{html::input_data::MouseButton, prelude::*};
 
+mod circles;
 mod panels;
 mod utils;
+use circles::*;
 use panels::*;
 use utils::*;
 
@@ -19,14 +21,16 @@ fn App() -> Element {
     let great_circles = use_signal(Vec::<GreatCircle>::new); // Stores indices of points that are poles of great circles
     let scale = use_signal(|| (1.0, [0.0, 0.0, 0.0], Quaternion::identity())); // zoom, rotation vec3, quaternion
     let state = use_signal(State::initialize); // state of the application
+    let show_grid = use_signal(|| false); // show/hide grid
 
     rsx! {
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
         SelectionBox { points, state }
-        SlidersPanel { points, scale }
+        SlidersPanel { points, scale, show_grid }
         LeftPanel { state, points, great_circles }
+        GitHubIcon {}
         FilePanel {
             points,
             arcs,
@@ -40,6 +44,7 @@ fn App() -> Element {
             great_circles,
             state,
             scale,
+            show_grid,
         }
     }
 }
@@ -51,8 +56,11 @@ pub fn Sphere(
     great_circles: Signal<Vec<GreatCircle>>,
     state: Signal<State>,
     scale: Signal<(f64, Vec3, Quaternion)>,
+    show_grid: Signal<bool>,
 ) -> Element {
     let mut dragged_point = use_signal(|| None::<usize>); // id of the point being dragged
+    let mut is_rotating = use_signal(|| false);
+    let mut last_rotation_pos = use_signal(|| (0.0, 0.0));
 
     let select_point = move |x: f64, y: f64| {
         let [px, py, pz] = transform_viewport_to_sphere(x, y);
@@ -81,7 +89,15 @@ pub fn Sphere(
         let multi = event.modifiers().shift();
         match select_point(event.client_coordinates().x, event.client_coordinates().y) {
             Selected::None => (),
-            Selected::New(point) => {
+            Selected::New(mut point) => {
+                if event.modifiers().shift() {
+                    let threshold = 0.05; // About 3 degrees in radians
+                    let snapped =
+                        snap_to_great_circle(point.rotated, &great_circles(), &points(), threshold);
+
+                    // Update with snapped coordinates
+                    point = Point::from_vec3_rotated(points.len(), snapped, scale().2);
+                }
                 points.write().push(point);
                 state.write().toggle_select(multi, points.len() - 1);
             }
@@ -118,7 +134,35 @@ pub fn Sphere(
         }
     };
 
+    let mut middle_click = move |event: Event<MouseData>| {
+        // Start rotation when middle button is pressed
+        is_rotating.set(true);
+
+        // Store initial position for rotation calculation
+        last_rotation_pos.set((event.client_coordinates().x, event.client_coordinates().y));
+
+        // Prevent default browser middle-click behavior
+        event.prevent_default();
+    };
+
+    let scroll = move |event: Event<WheelData>| {
+        // Get scroll delta (negative for scroll up/zoom in, positive for scroll down/zoom out)
+        let delta = event.delta().strip_units().y;
+
+        // Calculate new scale with smooth zooming behavior
+        // The factor 0.001 controls zoom sensitivity
+        let zoom_factor = 1.0 - delta * 0.001;
+        let mut new_scale = scale().0 * zoom_factor;
+
+        // Constrain scale to reasonable limits
+        new_scale = new_scale.clamp(0.5, 2.0);
+
+        // Update scale
+        scale.write().0 = new_scale;
+    };
+
     let mouse_move = move |event: Event<MouseData>| {
+        // Handle point dragging (your existing code)
         if let Some(dragged_idx) = dragged_point() {
             let viewport_x = event.client_coordinates().x;
             let viewport_y = event.client_coordinates().y;
@@ -126,19 +170,66 @@ pub fn Sphere(
             if pz.is_nan() {
                 return;
             }
-            points.write()[dragged_idx].move_to([px, py, pz], scale().2);
+
+            // Apply snapping during drag if Shift is held
+            if event.modifiers().shift() {
+                let threshold = 0.05; // About 7 degrees
+                let snapped =
+                    snap_to_great_circle([px, py, pz], &great_circles(), &points(), threshold);
+                points.write()[dragged_idx].move_to(snapped, scale().2);
+            } else {
+                points.write()[dragged_idx].move_to([px, py, pz], scale().2);
+            }
+
             state.write().select(dragged_idx);
+        }
+
+        // Handle sphere rotation
+        if is_rotating() {
+            let current_x = event.client_coordinates().x;
+            let current_y = event.client_coordinates().y;
+            let (last_x, last_y) = last_rotation_pos();
+
+            // Calculate rotation angles based on mouse movement
+            // Adjust sensitivity as needed
+            let sensitivity = 0.005;
+            let delta_x = (current_x - last_x) * sensitivity;
+            let delta_y = -(current_y - last_y) * sensitivity;
+
+            // Create rotation quaternions for both axes
+            let rotation_y = Quaternion::from_axis_angle([1.0, 0.0, 0.0], delta_y);
+            let rotation_x = Quaternion::from_axis_angle([0.0, 1.0, 0.0], delta_x);
+
+            // Combine rotations with existing rotation
+            let new_rotation = rotation_y.multiply(rotation_x).multiply(scale().2);
+
+            // Update scale with new rotation quaternion
+            scale.write().2 = new_rotation;
+            scale.write().1 = new_rotation.to_euler_deg();
+
+            // Update last position
+            last_rotation_pos.set((current_x, current_y));
+
+            // Apply rotation to all points
+            for point in points.write().iter_mut() {
+                point.rotate(new_rotation);
+            }
         }
     };
 
-    let mouse_up = move |_event: Event<MouseData>| {
+    let mouse_up = move |_: Event<MouseData>| {
+        // Stop dragging point
         dragged_point.set(None);
+
+        // Stop rotation
+        is_rotating.set(false);
     };
 
     let key_event = move |event: Event<KeyboardData>| {
         event.prevent_default();
+
         let mut s = state.write();
-        for i in s.selected().to_vec() {
+        for i in s.selected().iter().rev().copied().collect::<Vec<_>>() {
             match event.key() {
                 Key::Delete => {
                     if !points()[i].removable {
@@ -163,7 +254,7 @@ pub fn Sphere(
                             x.pole = i;
                         }
                     });
-                    s.clear_selection();
+                    s.pop_selected();
                 }
                 Key::Escape => {
                     s.clear_selection();
@@ -175,14 +266,26 @@ pub fn Sphere(
                         great_circles.write().retain(|x| x.pole != i);
                     }
                 }
-                Key::Character(ref c) if c.as_str() == "," => {
+                Key::Character(ref c) if c.as_str() == "/" => {
                     let new = points()[i].new_inverted(points().len());
                     points.write().push(new);
                 }
                 Key::Character(c) => {
+                    if let Some(gc) = great_circles.write().iter_mut().find(|x| x.pole == i) {
+                        if event.modifiers().shift() {
+                            gc.name.push_str(&toggle_case(&c));
+                            break;
+                        }
+                    }
                     points.write()[i].name.push_str(&c);
                 }
                 Key::Backspace => {
+                    if let Some(gc) = great_circles.write().iter_mut().find(|x| x.pole == i) {
+                        if event.modifiers().shift() {
+                            gc.name.pop();
+                            break;
+                        }
+                    }
                     points.write()[i].name.pop();
                 }
                 _ => {}
@@ -206,9 +309,11 @@ pub fn Sphere(
                     match event.trigger_button() {
                         Some(MouseButton::Primary) => primary_click(event),
                         Some(MouseButton::Secondary) => secondary_click(event),
+                        Some(MouseButton::Auxiliary) => middle_click(event),
                         _ => {}
                     }
                 },
+                onwheel: scroll,
                 svg {
                     width: "95vw",
                     height: "95vh",
@@ -222,7 +327,11 @@ pub fn Sphere(
                         fill: "rgba(0, 0, 0, 0.4)",
                     }
 
+                    if show_grid() {
+                        CoordinateGrid { scale }
+                    }
                     GreatCircleDrawer { great_circles, points }
+                    GreatCircleLabels { great_circles, points }
                     ArcDrawer { arcs, points }
 
                     for (i , x , y , _ , r , opacity , name) in points()
@@ -254,145 +363,6 @@ pub fn Sphere(
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-#[component]
-fn ArcDrawer(arcs: Signal<Vec<(usize, usize)>>, points: Signal<Vec<Point>>) -> Element {
-    // Function to calculate the great circle arc points
-    let calculate_great_circle_arc = |p1: Vec3, p2: Vec3| -> Vec<Vec3> {
-        let mut arc_points = Vec::new();
-        let pq = (p1[0] * p2[0] + p1[1] * p2[1] + p1[2] * p2[2]).clamp(-1.0, 1.0);
-
-        let z = if pq.abs() > 1.0 - 1e-5 {
-            let r = (p1[0].powi(2) + p1[1].powi(2)).sqrt();
-            [-p1[1] / r, p1[0] / r, 0.0]
-        } else {
-            let r = (1.0 - pq.powi(2)).sqrt();
-            [
-                (p2[0] - p1[0] * pq) / r,
-                (p2[1] - p1[1] * pq) / r,
-                (p2[2] - p1[2] * pq) / r,
-            ]
-        };
-        let t = pq.acos();
-        let steps = 200; // Number of points along the arc
-        for i in 0..=steps {
-            let theta = i as f64 * t / steps as f64;
-            let point = [
-                theta.cos() * p1[0] + theta.sin() * z[0],
-                theta.cos() * p1[1] + theta.sin() * z[1],
-                theta.cos() * p1[2] + theta.sin() * z[2],
-            ];
-            arc_points.push(point);
-        }
-        arc_points
-    };
-
-    rsx! {
-        for (front_path_data , back_path_data) in arcs()
-            .iter()
-            .map(|&(p1_idx, p2_idx)| {
-                let p1 = points()[p1_idx].rotated;
-                let p2 = points()[p2_idx].rotated;
-                let arc_points = calculate_great_circle_arc(p1, p2);
-                let mut front_path = Vec::new();
-                let mut back_path = Vec::new();
-                for [x, y, z] in arc_points {
-                    let svg_x = x * 25.0 + 50.0;
-                    let svg_y = y * 25.0 + 50.0;
-                    if z >= 0.0 {
-                        front_path.push(format!("{},{}", svg_x, svg_y));
-                    } else {
-                        back_path.push(format!("{},{}", svg_x, svg_y));
-                    }
-                }
-                let front_path_data = if !front_path.is_empty() {
-                    "M ".to_string() + &front_path.join(" L ")
-                } else {
-                    String::new()
-                };
-                let back_path_data = if !back_path.is_empty() {
-                    "M ".to_string() + &back_path.join(" L ")
-                } else {
-                    String::new()
-                };
-                (front_path_data, back_path_data)
-            })
-        {
-            path {
-                d: front_path_data,
-                stroke: "#FFA500",
-                stroke_width: "0.3",
-                fill: "none",
-            }
-            path {
-                d: back_path_data,
-                stroke: "rgba(255, 165, 0, 0.4)",
-                stroke_width: "0.3",
-                fill: "none",
-            }
-        }
-    }
-}
-
-#[component]
-fn GreatCircleDrawer(great_circles: Signal<Vec<GreatCircle>>, points: Signal<Vec<Point>>) -> Element {
-    let calculate_great_circle = |pole: Vec3| -> Vec<Vec3> {
-        let mut circle_points = Vec::new();
-        let steps = 200; // Number of points along the great circle
-        let [x, y, z] = pole;
-
-        let r2 = (x.powi(2) + y.powi(2)).sqrt();
-        let u = [-y / r2, x / r2, 0.0]; // u = p × (0, 0, 1)
-        let v = [-z * u[1], z * u[0], r2];
-        for i in 0..=steps {
-            let theta = i as f64 * std::f64::consts::TAU / steps as f64;
-            let point = [
-                theta.cos() * u[0] + theta.sin() * v[0],
-                theta.cos() * u[1] + theta.sin() * v[1],
-                theta.cos() * u[2] + theta.sin() * v[2],
-            ];
-            circle_points.push(point);
-        }
-        circle_points
-    };
-
-    rsx! {
-        for (front_path_data , back_path_data) in great_circles()
-            .iter()
-            .map(|gc| {
-                let pole = points()[gc.pole].rotated;
-                let circle_points = calculate_great_circle(pole);
-                let mut front_path = Vec::new();
-                let mut back_path = Vec::new();
-                for [x, y, z] in circle_points {
-                    let svg_x = x * 25.0 + 50.0;
-                    let svg_y = y * 25.0 + 50.0;
-                    if z >= 0.0 {
-                        front_path.push(format!("{},{}", svg_x, svg_y));
-                    } else {
-                        back_path.push(format!("{},{}", svg_x, svg_y));
-                    }
-                }
-                let front_path_data = "M ".to_string() + &front_path.join(" L ");
-                let back_path_data = "M ".to_string() + &back_path.join(" L ");
-                (front_path_data, back_path_data)
-            })
-        {
-            path {
-                d: front_path_data,
-                stroke: "lime",
-                stroke_width: "0.3",
-                fill: "none",
-            }
-            path {
-                d: back_path_data,
-                stroke: "rgba(0, 255, 0, 0.4)",
-                stroke_width: "0.3",
-                fill: "none",
             }
         }
     }
