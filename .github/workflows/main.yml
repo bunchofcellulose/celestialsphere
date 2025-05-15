@@ -23,7 +23,13 @@ jobs:
         run: cargo install dioxus-cli
 
       - name: Build for Web
-        run: dx build --platform web
+        run: dx build --platform web --release
+
+      - name: List output directory for debugging
+        run: ls -R target/web
 
       - name: Deploy to GitHub Pages
-        uses: DioxusLabs/deploy-action@0.1.2
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./target/web
