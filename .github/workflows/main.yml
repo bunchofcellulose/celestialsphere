@@ -9,5 +9,21 @@ jobs:
   build-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: "Dioxus Deploy"
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          components: rust-src
+
+      - name: Install Dioxus CLI
+        run: cargo install dioxus-cli
+
+      - name: Build for Web
+        run: dx build --platform web
+
+      - name: Deploy to GitHub Pages
         uses: DioxusLabs/deploy-action@0.1.2
