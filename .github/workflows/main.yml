@@ -1,35 +1,25 @@
-name: github pages
+name: Deploy to GitHub Pages
 
 on:
   push:
     branches:
-      - main
+      - main  # Change if your default branch is different
 
 jobs:
-  build-deploy:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Setup Pages
+        uses: actions/configure-pages@v3
+
+      - name: Upload `docs/` folder
+        uses: actions/upload-pages-artifact@v2
         with:
-          toolchain: stable
-          profile: minimal
-          components: rust-src
-
-      - name: Install Dioxus CLI
-        run: cargo install dioxus-cli
-
-      - name: Build for Web
-        run: dx build --platform web --release
-
-      - name: List output directory for debugging
-        run: ls -R target/web
+          path: docs
 
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./target/web
+        uses: actions/deploy-pages@v2
