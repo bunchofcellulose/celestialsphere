@@ -2,21 +2,12 @@
 
 [web.app]
 base_path = "celestialsphere"
+title = "Celestial Sphere"
+out_dir = "docs"
 
-# HTML title tag content
-title = "celestialsphere"
-
-# include `assets` in web platform
 [web.resource]
-
-# Additional CSS style files
 style = []
-
-# Additional JavaScript files
 script = []
 
 [web.resource.dev]
-
-# Javascript code file
-# serve: [dev-server] only
 script = []
