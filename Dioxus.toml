@@ -1,6 +1,7 @@
 [application]
 
 [web.app]
+base_path = "celestialsphere"
 
 # HTML title tag content
 title = "celestialsphere"

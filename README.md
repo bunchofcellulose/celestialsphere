@@ -1,6 +1,6 @@
 # Celestial Sphere
 
-Celestial Sphere is a web application that provides a neat and user-friendly interface for drawing and visualizing diagrams on a sphere. My aim for building this is to provide a tool for students and educators to easily learn and engage with spherical diagrams, which are commonly used in spherical astronomy.
+[Celestial Sphere](https://bunch-of-cells.github.io/celestialsphere/) is a web application that provides a neat and user-friendly interface for drawing and visualizing diagrams on a sphere. My aim for building this is to provide a tool for students and educators to easily learn and engage with spherical diagrams, which are commonly used in spherical astronomy.
 
 ## Controls
 
