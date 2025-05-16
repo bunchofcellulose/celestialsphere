@@ -3,7 +3,11 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # Change if your default branch is different
+      - main  # or your default branch
+
+permissions:
+  pages: write
+  id-token: write
 
 jobs:
   deploy:
@@ -11,15 +15,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Pages
-        uses: actions/configure-pages@v3
+        uses: actions/configure-pages@v4
 
-      - name: Upload `docs/` folder
-        uses: actions/upload-pages-artifact@v2
+      - name: Upload docs folder
+        uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: docs  # This is the folder with your static content
 
       - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v2
+        uses: actions/deploy-pages@v4
