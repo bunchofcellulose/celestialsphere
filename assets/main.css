@@ -81,8 +81,7 @@ body {
     font-family: monospace;
 }
 
-.file-panel button,
-.file-panel label {
+.file-panel button, .file-panel label {
     display: flex; /* Ensure the label behaves like a flex container */
     align-items: center; /* Center the content vertically */
     justify-content: center; /* Center the content horizontally */
@@ -96,10 +95,19 @@ body {
     border: none;
     border-radius: 4px;
     cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.file-panel label {
+    background-size: 80% 80%; /* Make icon smaller inside label */
+}
+
+.file-panel label:hover, .file-panel button:hover {
+    background-color: #bbb;
 }
 
 .file-panel input {
-    display: none; /* Hide the input element */
+    display: none;
 }
 
 .github-icon {

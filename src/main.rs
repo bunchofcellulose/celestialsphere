@@ -1,14 +1,19 @@
 use dioxus::{html::input_data::MouseButton, prelude::*};
 
-mod circles;
+mod circle;
+mod event;
 mod panels;
-mod utils;
-use circles::*;
+mod point;
+use circle::*;
+use event::*;
 use panels::*;
-use utils::*;
+use point::*;
 
 const FAVICON: Asset = asset!("/assets/triangle.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
+const SAVE: Asset = asset!("/assets/save.ico");
+const LOAD: Asset = asset!("/assets/load.ico");
+const NEW_FILE: Asset = asset!("/assets/new.ico");
 
 fn main() {
     dioxus::launch(App);
@@ -16,12 +21,13 @@ fn main() {
 
 #[component]
 fn App() -> Element {
-    let points = use_signal(Vec::<Point>::new); // points on the sphere
-    let arcs = use_signal(Vec::<(usize, usize)>::new); // id of the two points at the end of arc
-    let great_circles = use_signal(Vec::<GreatCircle>::new); // Stores indices of points that are poles of great circles
-    let scale = use_signal(|| (1.0, [0.0, 0.0, 0.0], Quaternion::identity())); // zoom, rotation vec3, quaternion
-    let state = use_signal(State::initialize); // state of the application
-    let show_grid = use_signal(|| false); // show/hide grid
+    let points = use_signal(Vec::<Point>::new);
+    let arcs = use_signal(Vec::<(usize, usize)>::new);
+    let great_circles = use_signal(Vec::<GreatCircle>::new);
+    let small_circles = use_signal(Vec::<SmallCircle>::new);
+    let scale = use_signal(|| (1.0, [0.0, 0.0, 0.0], Quaternion::identity()));
+    let state = use_signal(State::initialize);
+    let show_grid = use_signal(|| false);
 
     rsx! {
         document::Link { rel: "icon", href: FAVICON }
@@ -29,12 +35,18 @@ fn App() -> Element {
 
         SelectionBox { points, state }
         SlidersPanel { points, scale, show_grid }
-        LeftPanel { state, points, great_circles }
+        LeftPanel {
+            state,
+            points,
+            great_circles,
+            small_circles,
+        }
         GitHubIcon {}
         FilePanel {
             points,
             arcs,
             great_circles,
+            small_circles,
             scale,
             state,
         }
@@ -42,6 +54,7 @@ fn App() -> Element {
             points,
             arcs,
             great_circles,
+            small_circles,
             state,
             scale,
             show_grid,
@@ -51,246 +64,50 @@ fn App() -> Element {
 
 #[component]
 pub fn Sphere(
-    points: Signal<Vec<Point>>,
-    arcs: Signal<Vec<(usize, usize)>>,
-    great_circles: Signal<Vec<GreatCircle>>,
-    state: Signal<State>,
-    scale: Signal<(f64, Vec3, Quaternion)>,
+    mut points: Signal<Vec<Point>>,
+    mut arcs: Signal<Vec<(usize, usize)>>,
+    mut great_circles: Signal<Vec<GreatCircle>>,
+    mut small_circles: Signal<Vec<SmallCircle>>,
+    mut state: Signal<State>,
+    mut scale: Signal<(f64, Vec3, Quaternion)>,
     show_grid: Signal<bool>,
 ) -> Element {
-    let mut dragged_point = use_signal(|| None::<usize>); // id of the point being dragged
-    let mut is_rotating = use_signal(|| false);
-    let mut last_rotation_pos = use_signal(|| (0.0, 0.0));
+    let dragged_point = use_signal(|| None::<usize>);
+    let is_rotating = use_signal(|| false);
+    let last_rotation_pos = use_signal(|| (0.0, 0.0));
 
-    let select_point = move |x: f64, y: f64| {
-        let [px, py, pz] = transform_viewport_to_sphere(x, y);
-        if pz.is_nan() {
-            return Selected::None;
-        }
-        for p in points().iter() {
-            let [x, y, z] = p.rotated;
-            if z < 0.0 {
-                continue;
-            }
-            let dx = px - x;
-            let dy = py - y;
-            if dx.powi(2) + dy.powi(2) <= 0.002 {
-                return Selected::Existing(p.id);
-            }
-        }
-        Selected::New(Point::from_vec3_rotated(
-            points.len(),
-            [px, py, pz],
-            scale().2,
-        ))
+    let primary_click = move |event: Event<MouseData>| {
+        handle_primary_click(event, points, great_circles, state, scale, dragged_point)
     };
-
-    let mut primary_click = move |event: Event<MouseData>| {
-        let multi = event.modifiers().shift();
-        match select_point(event.client_coordinates().x, event.client_coordinates().y) {
-            Selected::None => (),
-            Selected::New(mut point) => {
-                if event.modifiers().shift() {
-                    let threshold = 0.05; // About 3 degrees in radians
-                    let snapped =
-                        snap_to_great_circle(point.rotated, &great_circles(), &points(), threshold);
-
-                    // Update with snapped coordinates
-                    point = Point::from_vec3_rotated(points.len(), snapped, scale().2);
-                }
-                points.write().push(point);
-                state.write().toggle_select(multi, points.len() - 1);
-            }
-            Selected::Existing(selected) => {
-                if state.write().toggle_select(multi, selected) && points()[selected].movable {
-                    dragged_point.set(Some(selected));
-                }
-            }
-        }
-    };
-
-    let mut secondary_click = move |event: Event<MouseData>| {
-        if state.read().selected().is_empty() {
-            return;
-        }
-
-        match select_point(event.client_coordinates().x, event.client_coordinates().y) {
-            Selected::None => (),
-            Selected::New(_) => {}
-            Selected::Existing(p) => {
-                for &selected in state.read().selected() {
-                    if p == selected {
-                        continue;
-                    }
-                    if arcs().contains(&(selected, p)) {
-                        arcs.write().retain(|&(p1, p2)| p1 != selected || p2 != p);
-                    } else if arcs().contains(&(p, selected)) {
-                        arcs.write().retain(|&(p1, p2)| p1 != p || p2 != selected);
-                    } else {
-                        arcs.write().push((selected, p));
-                    }
-                }
-            }
-        }
-    };
-
-    let mut middle_click = move |event: Event<MouseData>| {
-        // Start rotation when middle button is pressed
-        is_rotating.set(true);
-
-        // Store initial position for rotation calculation
-        last_rotation_pos.set((event.client_coordinates().x, event.client_coordinates().y));
-
-        // Prevent default browser middle-click behavior
-        event.prevent_default();
-    };
-
-    let scroll = move |event: Event<WheelData>| {
-        // Get scroll delta (negative for scroll up/zoom in, positive for scroll down/zoom out)
-        let delta = event.delta().strip_units().y;
-
-        // Calculate new scale with smooth zooming behavior
-        // The factor 0.001 controls zoom sensitivity
-        let zoom_factor = 1.0 - delta * 0.001;
-        let mut new_scale = scale().0 * zoom_factor;
-
-        // Constrain scale to reasonable limits
-        new_scale = new_scale.clamp(0.5, 2.0);
-
-        // Update scale
-        scale.write().0 = new_scale;
-    };
-
+    let secondary_click =
+        move |event: Event<MouseData>| handle_secondary_click(event, points, arcs, state);
+    let middle_click =
+        move |event: Event<MouseData>| handle_middle_click(event, is_rotating, last_rotation_pos);
+    let scroll = move |event: Event<WheelData>| handle_scroll(event, scale);
     let mouse_move = move |event: Event<MouseData>| {
-        // Handle point dragging (your existing code)
-        if let Some(dragged_idx) = dragged_point() {
-            let viewport_x = event.client_coordinates().x;
-            let viewport_y = event.client_coordinates().y;
-            let [px, py, pz] = transform_viewport_to_sphere(viewport_x, viewport_y);
-            if pz.is_nan() {
-                return;
-            }
-
-            // Apply snapping during drag if Shift is held
-            if event.modifiers().shift() {
-                let threshold = 0.05; // About 7 degrees
-                let snapped =
-                    snap_to_great_circle([px, py, pz], &great_circles(), &points(), threshold);
-                points.write()[dragged_idx].move_to(snapped, scale().2);
-            } else {
-                points.write()[dragged_idx].move_to([px, py, pz], scale().2);
-            }
-
-            state.write().select(dragged_idx);
-        }
-
-        // Handle sphere rotation
-        if is_rotating() {
-            let current_x = event.client_coordinates().x;
-            let current_y = event.client_coordinates().y;
-            let (last_x, last_y) = last_rotation_pos();
-
-            // Calculate rotation angles based on mouse movement
-            // Adjust sensitivity as needed
-            let sensitivity = 0.005;
-            let delta_x = (current_x - last_x) * sensitivity;
-            let delta_y = -(current_y - last_y) * sensitivity;
-
-            // Create rotation quaternions for both axes
-            let rotation_y = Quaternion::from_axis_angle([1.0, 0.0, 0.0], delta_y);
-            let rotation_x = Quaternion::from_axis_angle([0.0, 1.0, 0.0], delta_x);
-
-            // Combine rotations with existing rotation
-            let new_rotation = rotation_y.multiply(rotation_x).multiply(scale().2);
-
-            // Update scale with new rotation quaternion
-            scale.write().2 = new_rotation;
-            scale.write().1 = new_rotation.to_euler_deg();
-
-            // Update last position
-            last_rotation_pos.set((current_x, current_y));
-
-            // Apply rotation to all points
-            for point in points.write().iter_mut() {
-                point.rotate(new_rotation);
-            }
-        }
+        handle_mouse_move(
+            event,
+            points,
+            great_circles,
+            state,
+            scale,
+            dragged_point,
+            is_rotating,
+            last_rotation_pos,
+        )
     };
-
-    let mouse_up = move |_: Event<MouseData>| {
-        // Stop dragging point
-        dragged_point.set(None);
-
-        // Stop rotation
-        is_rotating.set(false);
-    };
-
+    let mouse_up =
+        move |event: Event<MouseData>| handle_mouse_up(event, dragged_point, is_rotating);
     let key_event = move |event: Event<KeyboardData>| {
-        event.prevent_default();
-
-        let mut s = state.write();
-        for i in s.selected().iter().rev().copied().collect::<Vec<_>>() {
-            match event.key() {
-                Key::Delete => {
-                    if !points()[i].removable {
-                        return;
-                    }
-                    points.write().swap_remove(i);
-                    if let Some(p) = points.write().get_mut(i) {
-                        p.id = i;
-                    }
-                    arcs.write().retain(|&(p1, p2)| p1 != i && p2 != i);
-                    great_circles.write().retain(|x| x.pole != i);
-                    arcs.write().iter_mut().for_each(|(p1, p2)| {
-                        if *p1 == points.len() {
-                            *p1 = i;
-                        }
-                        if *p2 == points.len() {
-                            *p2 = i;
-                        }
-                    });
-                    great_circles.write().iter_mut().for_each(|x| {
-                        if x.pole == points.len() {
-                            x.pole = i;
-                        }
-                    });
-                    s.pop_selected();
-                }
-                Key::Escape => {
-                    s.clear_selection();
-                }
-                Key::Character(ref c) if c.as_str() == "." => {
-                    if great_circles().iter().all(|x| x.pole != i) {
-                        great_circles.write().push(GreatCircle::new(i));
-                    } else {
-                        great_circles.write().retain(|x| x.pole != i);
-                    }
-                }
-                Key::Character(ref c) if c.as_str() == "/" => {
-                    let new = points()[i].new_inverted(points().len());
-                    points.write().push(new);
-                }
-                Key::Character(c) => {
-                    if let Some(gc) = great_circles.write().iter_mut().find(|x| x.pole == i) {
-                        if event.modifiers().shift() {
-                            gc.name.push_str(&toggle_case(&c));
-                            break;
-                        }
-                    }
-                    points.write()[i].name.push_str(&c);
-                }
-                Key::Backspace => {
-                    if let Some(gc) = great_circles.write().iter_mut().find(|x| x.pole == i) {
-                        if event.modifiers().shift() {
-                            gc.name.pop();
-                            break;
-                        }
-                    }
-                    points.write()[i].name.pop();
-                }
-                _ => {}
-            }
-        }
+        handle_key_event(
+            event,
+            points,
+            arcs,
+            great_circles,
+            small_circles,
+            scale,
+            state,
+        )
     };
 
     rsx! {
@@ -302,9 +119,7 @@ pub fn Sphere(
             tabindex: "0",
             style: "outline: none;",
             div {
-                oncontextmenu: move |event| {
-                    event.prevent_default();
-                },
+                oncontextmenu: move |event| event.prevent_default(),
                 onmousedown: move |event| {
                     match event.trigger_button() {
                         Some(MouseButton::Primary) => primary_click(event),
@@ -323,17 +138,17 @@ pub fn Sphere(
                         cy: "50",
                         r: "25",
                         stroke: "white",
-                        stroke_width: "0.5",
+                        stroke_width: "0.2",
                         fill: "rgba(0, 0, 0, 0.4)",
                     }
-
                     if show_grid() {
                         CoordinateGrid { scale }
                     }
                     GreatCircleDrawer { great_circles, points }
+                    SmallCircleDrawer { small_circles, points }
                     GreatCircleLabels { great_circles, points }
+                    SmallCircleLabels { small_circles, points }
                     ArcDrawer { arcs, points }
-
                     for (i , x , y , _ , r , opacity , name) in points()
                         .iter()
                         .map(|point| {
@@ -364,6 +179,56 @@ pub fn Sphere(
                     }
                 }
             }
+        }
+    }
+}
+
+pub struct State {
+    selected: Vec<usize>,
+}
+
+impl State {
+    pub fn initialize() -> Self {
+        Self { selected: vec![] }
+    }
+
+    pub fn selected(&self) -> &[usize] {
+        self.selected.as_slice()
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selected.clear();
+    }
+
+    pub fn pop_selected(&mut self) -> Option<usize> {
+        self.selected.pop()
+    }
+
+    pub fn toggle_select(&mut self, multi: bool, id: usize) -> bool {
+        if multi {
+            if self.selected.contains(&id) {
+                self.selected.retain(|&x| x != id);
+                false
+            } else {
+                self.selected.push(id);
+                true
+            }
+        } else if self.selected.len() == 1 && self.selected[0] == id {
+            self.selected.clear();
+            false
+        } else {
+            self.selected.clear();
+            self.selected.push(id);
+            true
+        }
+    }
+
+    pub fn select(&mut self, id: usize) -> bool {
+        if self.selected.contains(&id) {
+            false
+        } else {
+            self.selected.push(id);
+            true
         }
     }
 }
