@@ -1,6 +1,6 @@
 # Celestial Sphere
 
-[Celestial Sphere](https://bunch-of-cells.github.io/celestialsphere/) is a web application that provides a neat and user-friendly interface for drawing and visualizing diagrams on a sphere. My aim for building this is to provide a tool for students and educators to easily learn and engage with spherical diagrams, which are commonly used in spherical astronomy.
+[Celestial Sphere](https://bunchofcellulose.github.io/celestialsphere/) is a web application that provides a neat and user-friendly interface for drawing and visualizing diagrams on a sphere. My aim for building this is to provide a tool for students and educators to easily learn and engage with spherical diagrams, which are commonly used in spherical astronomy.
 
 ## Controls
 
@@ -42,3 +42,6 @@
 - Add a method to place a point at an angle to selected points
 - Add a method to place a point at a distance and angle from selected points
 - Add a method to place point at a given coordinate.
+- Add features to snap to circle intersections, small circles and arcs.
+- Add feature to group points.
+- Add feature to add multiple small circles with one pole.
