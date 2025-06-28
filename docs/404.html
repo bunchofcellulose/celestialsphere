@@ -5,14 +5,14 @@
     <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta charset="UTF-8" />
-  <link rel="preload" as="script" href="/celestialsphere/assets/celestialsphere-e7cacad198d7b64f.js" crossorigin><link rel="preload" as="fetch" type="application/wasm" href="/celestialsphere/assets/celestialsphere_bg-f311ff916a68c6b5.wasm" crossorigin></head>
+  <link rel="preload" as="script" href="/celestialsphere/assets/celestialsphere-e7cacad198d7b64f.js" crossorigin><link rel="preload" as="fetch" type="application/wasm" href="/celestialsphere/assets/celestialsphere_bg-e10611d8cb61b1a7.wasm" crossorigin></head>
   <body>
     <div id="main"></div>
   <script>
             // We can't use a module script here because we need to start the script immediately when streaming
             import("/celestialsphere/assets/celestialsphere-e7cacad198d7b64f.js").then(
                 ({ default: init }) => {
-                init("/celestialsphere/assets/celestialsphere_bg-f311ff916a68c6b5.wasm").then((wasm) => {
+                init("/celestialsphere/assets/celestialsphere_bg-e10611d8cb61b1a7.wasm").then((wasm) => {
                     if (wasm.__wbindgen_start == undefined) {
                     wasm.main();
                     }

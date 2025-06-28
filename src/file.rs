@@ -7,8 +7,8 @@ use web_sys::{
 };
 
 // Constants for SVG generation
-const SVG_WIDTH: f64 = 800.0;
-const SVG_HEIGHT: f64 = 800.0;
+const SVG_WIDTH: f64 = 500.0;
+const SVG_HEIGHT: f64 = 500.0;
 const SVG_RADIUS: f64 = 325.0;
 const GRID_RESOLUTION: usize = 128;
 const ARC_RESOLUTION: usize = 64;
@@ -139,7 +139,7 @@ pub fn save_svg(
         &config,
     ));
 
-    svg.push_str("</svg>");
+    svg.push_str("\n</svg>");
 
     download_blob(&svg, "celestial_sphere.svg");
 }
@@ -278,7 +278,6 @@ impl PathBuilder {
 fn create_svg_header(config: &SvgConfig) -> String {
     format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">
-<rect width="100%" height="100%" fill="\#1e1e1e"/>
 <style>
 .sphere {{ fill: none; stroke: #bbb; stroke-width: 4; }}
 .arc {{ fill: none; stroke: #fbc02d; stroke-width: 4; }}
