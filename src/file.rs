@@ -7,9 +7,9 @@ use web_sys::{
 };
 
 // Constants for SVG generation
-const SVG_WIDTH: f64 = 500.0;
-const SVG_HEIGHT: f64 = 500.0;
-const SVG_RADIUS: f64 = 325.0;
+const SVG_WIDTH: f64 = 600.0;
+const SVG_HEIGHT: f64 = 600.0;
+const SVG_RADIUS: f64 = 250.0;
 const GRID_RESOLUTION: usize = 128;
 const ARC_RESOLUTION: usize = 64;
 const POINT_RADIUS_SMALL: f64 = 6.0;
