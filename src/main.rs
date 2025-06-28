@@ -2,10 +2,12 @@ use dioxus::{html::input_data::MouseButton, prelude::*};
 
 mod circle;
 mod event;
+mod file;
 mod panels;
 mod point;
 use circle::*;
 use event::*;
+use file::*;
 use panels::*;
 use point::*;
 
@@ -25,29 +27,25 @@ fn App() -> Element {
     let arcs = use_signal(Vec::<(usize, usize)>::new);
     let great_circles = use_signal(Vec::<GreatCircle>::new);
     let small_circles = use_signal(Vec::<SmallCircle>::new);
-    let scale = use_signal(|| (1.0, [0.0, 0.0, 0.0], Quaternion::identity()));
     let state = use_signal(State::initialize);
-    let show_grid = use_signal(|| false);
 
     rsx! {
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
         SelectionBox { points, state }
-        SlidersPanel { points, scale, show_grid }
+        SlidersPanel { points, state }
         LeftPanel {
             state,
             points,
             great_circles,
             small_circles,
         }
-        GitHubIcon {}
         FilePanel {
             points,
             arcs,
             great_circles,
             small_circles,
-            scale,
             state,
         }
         Sphere {
@@ -56,8 +54,6 @@ fn App() -> Element {
             great_circles,
             small_circles,
             state,
-            scale,
-            show_grid,
         }
     }
 }
@@ -69,28 +65,25 @@ pub fn Sphere(
     mut great_circles: Signal<Vec<GreatCircle>>,
     mut small_circles: Signal<Vec<SmallCircle>>,
     mut state: Signal<State>,
-    mut scale: Signal<(f64, Vec3, Quaternion)>,
-    show_grid: Signal<bool>,
 ) -> Element {
     let dragged_point = use_signal(|| None::<usize>);
     let is_rotating = use_signal(|| false);
     let last_rotation_pos = use_signal(|| (0.0, 0.0));
 
     let primary_click = move |event: Event<MouseData>| {
-        handle_primary_click(event, points, great_circles, state, scale, dragged_point)
+        handle_primary_click(event, points, great_circles, state, dragged_point)
     };
     let secondary_click =
         move |event: Event<MouseData>| handle_secondary_click(event, points, arcs, state);
     let middle_click =
         move |event: Event<MouseData>| handle_middle_click(event, is_rotating, last_rotation_pos);
-    let scroll = move |event: Event<WheelData>| handle_scroll(event, scale);
+    let scroll = move |event: Event<WheelData>| handle_scroll(event, state);
     let mouse_move = move |event: Event<MouseData>| {
         handle_mouse_move(
             event,
             points,
             great_circles,
             state,
-            scale,
             dragged_point,
             is_rotating,
             last_rotation_pos,
@@ -99,15 +92,7 @@ pub fn Sphere(
     let mouse_up =
         move |event: Event<MouseData>| handle_mouse_up(event, dragged_point, is_rotating);
     let key_event = move |event: Event<KeyboardData>| {
-        handle_key_event(
-            event,
-            points,
-            arcs,
-            great_circles,
-            small_circles,
-            scale,
-            state,
-        )
+        handle_key_event(event, points, arcs, great_circles, small_circles, state)
     };
 
     rsx! {
@@ -132,7 +117,7 @@ pub fn Sphere(
                 svg {
                     width: "95vw",
                     height: "95vh",
-                    view_box: "{50.0 - 50.0 / scale().0} {50.0 - 50.0 / scale().0} {100.0 / scale().0} {100.0 / scale().0}",
+                    view_box: "{50.0 - 50.0 / state.read().zoom} {50.0 - 50.0 / state.read().zoom} {100.0 / state.read().zoom} {100.0 / state.read().zoom}",
                     circle {
                         cx: "50",
                         cy: "50",
@@ -141,8 +126,8 @@ pub fn Sphere(
                         stroke_width: "0.2",
                         fill: "rgba(0, 0, 0, 0.4)",
                     }
-                    if show_grid() {
-                        CoordinateGrid { scale }
+                    if state.read().show_grid {
+                        CoordinateGrid { state }
                     }
                     GreatCircleDrawer { great_circles, points }
                     SmallCircleDrawer { small_circles, points }
@@ -185,11 +170,21 @@ pub fn Sphere(
 
 pub struct State {
     selected: Vec<usize>,
+    pub zoom: f64,
+    pub rotation: Vec3,
+    pub quaternion: Quaternion,
+    pub show_grid: bool,
 }
 
 impl State {
     pub fn initialize() -> Self {
-        Self { selected: vec![] }
+        Self {
+            selected: vec![],
+            zoom: 1.0,
+            rotation: [0.0, 0.0, 0.0],
+            quaternion: Quaternion::identity(),
+            show_grid: false,
+        }
     }
 
     pub fn selected(&self) -> &[usize] {

@@ -1,10 +1,10 @@
 use crate::*;
 
 #[component]
-pub fn CoordinateGrid(scale: Signal<(f64, Vec3, Quaternion)>) -> Element {
+pub fn CoordinateGrid(state: Signal<State>) -> Element {
     let mut lat_lines = Vec::new();
     let mut lon_lines = Vec::new();
-    let rotation = scale().2;
+    let rotation = state.read().quaternion;
 
     for i in 0..12 {
         let phi = i as f64 * std::f64::consts::TAU / 12.0;

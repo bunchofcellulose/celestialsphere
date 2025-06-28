@@ -10,7 +10,7 @@ pub enum Selected {
     None,
 }
 
-pub fn select_point(x: f64, y: f64, points: Vec<Point>, scale: Quaternion) -> Selected {
+pub fn select_point(x: f64, y: f64, points: Vec<Point>, state: Quaternion) -> Selected {
     let [px, py, pz] = transform_viewport_to_sphere(x, y);
     if pz.is_nan() {
         return Selected::None;
@@ -26,7 +26,7 @@ pub fn select_point(x: f64, y: f64, points: Vec<Point>, scale: Quaternion) -> Se
             return Selected::Existing(p.id);
         }
     }
-    Selected::New(Point::from_vec3_rotated(points.len(), [px, py, pz], scale))
+    Selected::New(Point::from_vec3_rotated(points.len(), [px, py, pz], state))
 }
 
 pub fn handle_primary_click(
@@ -34,11 +34,10 @@ pub fn handle_primary_click(
     mut points: Signal<Vec<Point>>,
     great_circles: Signal<Vec<GreatCircle>>,
     mut state: Signal<State>,
-    scale: Signal<(f64, Vec3, Quaternion)>,
     mut dragged_point: Signal<Option<usize>>,
 ) {
     let multi = event.modifiers().shift();
-    let scale_val = scale().2;
+    let scale_val = state.read().quaternion;
     match select_point(
         event.client_coordinates().x,
         event.client_coordinates().y,
@@ -112,12 +111,12 @@ pub fn handle_middle_click(
     event.prevent_default();
 }
 
-pub fn handle_scroll(event: Event<WheelData>, mut scale: Signal<(f64, Vec3, Quaternion)>) {
+pub fn handle_scroll(event: Event<WheelData>, mut state: Signal<State>) {
     let delta = event.delta().strip_units().y;
     let zoom_factor = 1.0 - delta * 0.001;
-    let mut new_scale = scale().0 * zoom_factor;
+    let mut new_scale = state.read().zoom * zoom_factor;
     new_scale = new_scale.clamp(0.5, 2.0);
-    scale.write().0 = new_scale;
+    state.write().zoom = new_scale;
 }
 
 pub fn handle_mouse_move(
@@ -125,7 +124,6 @@ pub fn handle_mouse_move(
     mut points: Signal<Vec<Point>>,
     great_circles: Signal<Vec<GreatCircle>>,
     mut state: Signal<State>,
-    mut scale: Signal<(f64, Vec3, Quaternion)>,
     dragged_point: Signal<Option<usize>>,
     is_rotating: Signal<bool>,
     mut last_rotation_pos: Signal<(f64, f64)>,
@@ -141,9 +139,9 @@ pub fn handle_mouse_move(
             let threshold = 0.05;
             let snapped =
                 snap_to_great_circle([px, py, pz], &great_circles(), &points(), threshold);
-            points.write()[dragged_idx].move_to(snapped, scale().2);
+            points.write()[dragged_idx].move_to(snapped, state.read().quaternion);
         } else {
-            points.write()[dragged_idx].move_to([px, py, pz], scale().2);
+            points.write()[dragged_idx].move_to([px, py, pz], state.read().quaternion);
         }
         state.write().select(dragged_idx);
     }
@@ -156,9 +154,11 @@ pub fn handle_mouse_move(
         let delta_y = -(current_y - last_y) * sensitivity;
         let rotation_y = Quaternion::from_axis_angle([1.0, 0.0, 0.0], delta_y);
         let rotation_x = Quaternion::from_axis_angle([0.0, 1.0, 0.0], delta_x);
-        let new_rotation = rotation_y.multiply(rotation_x).multiply(scale().2);
-        scale.write().2 = new_rotation;
-        scale.write().1 = new_rotation.to_euler_deg();
+        let new_rotation = rotation_y
+            .multiply(rotation_x)
+            .multiply(state.read().quaternion);
+        state.write().quaternion = new_rotation;
+        state.write().rotation = new_rotation.to_euler_deg();
         last_rotation_pos.set((current_x, current_y));
         for point in points.write().iter_mut() {
             point.rotate(new_rotation);
@@ -181,10 +181,10 @@ pub fn handle_key_event(
     mut arcs: Signal<Vec<(usize, usize)>>,
     mut great_circles: Signal<Vec<GreatCircle>>,
     mut small_circles: Signal<Vec<SmallCircle>>,
-    scale: Signal<(f64, Vec3, Quaternion)>,
     mut state: Signal<State>,
 ) {
     event.prevent_default();
+    let q = state.read().quaternion;
     let mut s = state.write();
 
     for i in s.selected().iter().rev().copied().collect::<Vec<_>>() {
@@ -278,7 +278,7 @@ pub fn handle_key_event(
                         great_circles.write().retain(|gc| gc.pole != idx);
                         return;
                     }
-                    let new_point = Point::from_vec3_absolute(points().len(), normal, scale().2);
+                    let new_point = Point::from_vec3_absolute(points().len(), normal, q);
                     points.write().push(new_point);
                     great_circles
                         .write()
@@ -333,7 +333,7 @@ pub fn handle_key_event(
                     }
                     let plane_distance = p1[0] * n[0] + p1[1] * n[1] + p1[2] * n[2];
                     let new_pole_idx = points().len();
-                    let new_pole = Point::from_vec3_absolute(new_pole_idx, n, scale().2);
+                    let new_pole = Point::from_vec3_absolute(new_pole_idx, n, q);
                     points.write().push(new_pole);
                     small_circles
                         .write()
@@ -396,6 +396,11 @@ pub fn handle_key_event(
                 if let Some(gc) = great_circles.write().iter_mut().find(|x| x.pole == i) {
                     if event.modifiers().shift() {
                         gc.name.pop();
+                        continue;
+                    }
+                } else if let Some(sc) = small_circles.write().iter_mut().find(|x| x.pole == i) {
+                    if event.modifiers().shift() {
+                        sc.name.pop();
                         continue;
                     }
                 }

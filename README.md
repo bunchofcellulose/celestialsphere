@@ -31,13 +31,11 @@
 - On having a point selected, the coordinates of the point are displayed. The point can be configured to be non-movable or non-removable.
 - If a single point having an associated great circle is selected, properties of the great circle are displayed.
 - If 3 points are selected, the properties of the triangle formed by them are displayed.
-- Diagrams can be saved as .json files, which can be loaded later. A fresh new diagram can be obtained. These options are available at the bottom left in the file panel.
+- Diagrams can be saved as .json files, which can be loaded later. The diagrams can also be saved as .svg files. A fresh new diagram can be obtained. These options are available at the bottom left in the file panel.
 - Small circle having the same pole as a great circle can not be renamed, the great circle has to be first removed, then the small circle can be renamed.
 
 ## TODO
 
-- Add a feature to save the diagram as an image.
-- Add a feature to export the diagram as a .svg file.
 - Add a method to place a point at a distance from a selected point
 - Add a method to place a point at an angle to selected points
 - Add a method to place a point at a distance and angle from selected points
