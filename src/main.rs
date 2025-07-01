@@ -136,11 +136,24 @@ pub fn Sphere(
                     ArcDrawer { arcs, points }
                     for (i , x , y , _ , r , opacity , name) in points()
                         .iter()
-                        .map(|point| {
+                        .filter_map(|point| {
+                            if point.hidden && !state.read().show_hidden
+                                && !state.read().selected().contains(&point.id)
+                            {
+                                return None;
+                            }
                             let [x, y, z] = point.rotated;
                             let opacity = if z > 0.0 { 1.0 } else { 0.4 };
                             let r = if state.read().selected().contains(&point.id) { 1.0 } else { 0.6 };
-                            (point.id, x * 25.0 + 50.0, y * 25.0 + 50.0, z, r, opacity, &point.name)
+                            Some((
+                                point.id,
+                                x * 25.0 + 50.0,
+                                y * 25.0 + 50.0,
+                                z,
+                                r,
+                                opacity,
+                                &point.name,
+                            ))
                         })
                     {
                         circle {
@@ -174,6 +187,8 @@ pub struct State {
     pub rotation: Vec3,
     pub quaternion: Quaternion,
     pub show_grid: bool,
+    pub show_hidden: bool,
+    pub groups: Vec<Vec<usize>>,
 }
 
 impl State {
@@ -184,6 +199,8 @@ impl State {
             rotation: [0.0, 0.0, 0.0],
             quaternion: Quaternion::identity(),
             show_grid: false,
+            show_hidden: false,
+            groups: vec![],
         }
     }
 
@@ -225,5 +242,95 @@ impl State {
             self.selected.push(id);
             true
         }
+    }
+
+    pub fn find_group_containing(&self, point_id: usize) -> Option<usize> {
+        self.groups
+            .iter()
+            .position(|group| group.contains(&point_id))
+    }
+
+    pub fn get_group_members(&self, point_id: usize) -> Vec<usize> {
+        if let Some(group_idx) = self.find_group_containing(point_id) {
+            self.groups[group_idx].clone()
+        } else {
+            vec![point_id]
+        }
+    }
+
+    pub fn toggle_select_group(&mut self, multi: bool, id: usize) -> bool {
+        let group_members = self.get_group_members(id);
+
+        if multi {
+            let all_selected = group_members
+                .iter()
+                .all(|&member_id| self.selected.contains(&member_id));
+            if all_selected {
+                for &member_id in &group_members {
+                    self.selected.retain(|&x| x != member_id);
+                }
+                false
+            } else {
+                for &member_id in &group_members {
+                    if !self.selected.contains(&member_id) {
+                        self.selected.push(member_id);
+                    }
+                }
+                true
+            }
+        } else {
+            let all_selected = group_members.len() == self.selected.len()
+                && group_members
+                    .iter()
+                    .all(|&member_id| self.selected.contains(&member_id));
+
+            if all_selected {
+                self.selected.clear();
+                false
+            } else {
+                self.selected.clear();
+                self.selected.extend(group_members);
+                true
+            }
+        }
+    }
+
+    pub fn create_group_from_selected(&mut self) {
+        if self.selected.len() < 2 {
+            return;
+        }
+
+        for point_id in self.selected.clone() {
+            self.remove_from_group(point_id);
+        }
+
+        self.groups.push(self.selected.clone());
+    }
+
+    pub fn remove_from_group(&mut self, point_id: usize) {
+        if let Some(group_idx) = self.find_group_containing(point_id) {
+            self.groups[group_idx].retain(|&id| id != point_id);
+            if self.groups[group_idx].len() <= 1 {
+                self.groups.remove(group_idx);
+            }
+        }
+    }
+
+    pub fn ungroup_selected(&mut self) {
+        for point_id in self.selected.clone() {
+            self.remove_from_group(point_id);
+        }
+    }
+
+    pub fn update_group_indices(&mut self, removed_idx: usize) {
+        for group in &mut self.groups {
+            group.retain(|&id| id != removed_idx);
+            for id in group.iter_mut() {
+                if *id > removed_idx {
+                    *id -= 1;
+                }
+            }
+        }
+        self.groups.retain(|group| group.len() > 1);
     }
 }

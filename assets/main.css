@@ -20,7 +20,7 @@ body {
 
 .left-info-boxes-container {
     position: absolute;
-    top: 200px;
+    top: 225px;
     left: 20px;
     display: flex;
     flex-direction: column;
@@ -38,6 +38,10 @@ body {
     border-radius: 4px;
     font-family: monospace;
     width: 280px;
+}
+
+.compact-selection {
+    width: 350px; /* Make compact selection boxes wider */
 }
 
 .info-box div {

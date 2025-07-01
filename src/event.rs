@@ -53,14 +53,14 @@ pub fn handle_primary_click(
                 point = Point::from_vec3_rotated(points().len(), snapped, scale_val);
                 points.write().push(point);
                 let new_point_idx = points().len() - 1;
-                state.write().toggle_select(multi, new_point_idx);
+                state.write().toggle_select_group(multi, new_point_idx);
             } else {
                 points.write().push(point);
-                state.write().toggle_select(multi, points().len() - 1);
+                state.write().toggle_select_group(multi, points().len() - 1);
             }
         }
         Selected::Existing(selected) => {
-            if state.write().toggle_select(multi, selected) && points()[selected].movable {
+            if state.write().toggle_select_group(multi, selected) && points()[selected].movable {
                 dragged_point.set(Some(selected));
             }
         }
@@ -135,15 +135,61 @@ pub fn handle_mouse_move(
         if pz.is_nan() {
             return;
         }
-        if event.modifiers().shift() {
+
+        let group_members = state.read().get_group_members(dragged_idx);
+        let original_pos = points()[dragged_idx].rotated;
+        let new_pos = if event.modifiers().shift() {
             let threshold = 0.05;
-            let snapped =
-                snap_to_great_circle([px, py, pz], &great_circles(), &points(), threshold);
-            points.write()[dragged_idx].move_to(snapped, state.read().quaternion);
+            snap_to_great_circle([px, py, pz], &great_circles(), &points(), threshold)
         } else {
-            points.write()[dragged_idx].move_to([px, py, pz], state.read().quaternion);
+            [px, py, pz]
+        };
+
+        // Calculate rotation quaternion from original to new position
+        let dot_product = original_pos[0] * new_pos[0]
+            + original_pos[1] * new_pos[1]
+            + original_pos[2] * new_pos[2];
+        let dot_clamped = dot_product.clamp(-1.0, 1.0);
+
+        // Only apply transformation if there's significant movement
+        if (dot_clamped - 1.0).abs() > 1e-6 {
+            let cross_product = [
+                original_pos[1] * new_pos[2] - original_pos[2] * new_pos[1],
+                original_pos[2] * new_pos[0] - original_pos[0] * new_pos[2],
+                original_pos[0] * new_pos[1] - original_pos[1] * new_pos[0],
+            ];
+
+            let cross_magnitude =
+                (cross_product[0].powi(2) + cross_product[1].powi(2) + cross_product[2].powi(2))
+                    .sqrt();
+
+            if cross_magnitude > 1e-10 {
+                // Calculate rotation angle and axis
+                let angle = dot_clamped.acos();
+                let axis = [
+                    cross_product[0] / cross_magnitude,
+                    cross_product[1] / cross_magnitude,
+                    cross_product[2] / cross_magnitude,
+                ];
+
+                // Create rotation quaternion
+                let rotation_quat = Quaternion::from_axis_angle(axis, angle);
+
+                // Apply rotation to all group members
+                for &member_idx in &group_members {
+                    if points()[member_idx].movable {
+                        let current_rotated = points()[member_idx].rotated;
+                        let new_rotated = rotation_quat.rotate_point_active(current_rotated);
+                        points.write()[member_idx].move_to(new_rotated, state.read().quaternion);
+                    }
+                }
+            }
         }
-        state.write().select(dragged_idx);
+
+        // Update selection to include all group members
+        for &member_idx in &group_members {
+            state.write().select(member_idx);
+        }
     }
     if is_rotating() {
         let current_x = event.client_coordinates().x;
@@ -187,41 +233,99 @@ pub fn handle_key_event(
     let q = state.read().quaternion;
     let mut s = state.write();
 
-    for i in s.selected().iter().rev().copied().collect::<Vec<_>>() {
+    // Handle group operations first
+    match event.key() {
+        Key::Character(ref c)
+            if (c.as_str() == "g" || c.as_str() == "G") && event.modifiers().ctrl() =>
+        {
+            s.create_group_from_selected();
+            return;
+        }
+        Key::Character(ref c)
+            if (c.as_str() == "u" || c.as_str() == "U") && event.modifiers().ctrl() =>
+        {
+            s.ungroup_selected();
+            return;
+        }
+        Key::Character(ref c)
+            if (c.as_str() == "h" || c.as_str() == "H") && event.modifiers().ctrl() =>
+        {
+            s.show_hidden = !s.show_hidden;
+            return;
+        }
+        _ => {}
+    }
+
+    // Get all points that should be affected (including group members)
+    let mut affected_points = Vec::new();
+    for &selected_id in s.selected().iter() {
+        let group_members = s.get_group_members(selected_id);
+        for member in group_members {
+            if !affected_points.contains(&member) {
+                affected_points.push(member);
+            }
+        }
+    }
+
+    for i in affected_points.iter().rev().copied().collect::<Vec<_>>() {
         match event.key() {
             Key::Delete => {
                 if !points()[i].removable {
-                    return;
+                    continue;
                 }
-                points.write().swap_remove(i);
-                if let Some(p) = points.write().get_mut(i) {
-                    p.id = i;
-                }
-                arcs.write().retain(|&(p1, p2)| p1 != i && p2 != i);
-                great_circles.write().retain(|x| x.pole != i);
-                small_circles.write().retain(|sc| sc.pole != i);
 
-                // Fix indices after swap_remove
-                let len = points().len();
-                for (p1, p2) in arcs.write().iter_mut() {
-                    if *p1 == len {
-                        *p1 = i;
-                    }
-                    if *p2 == len {
-                        *p2 = i;
+                // Get all group members before deletion and sort them in descending order
+                let mut group_members = s.get_group_members(i);
+                group_members.sort_by(|a, b| b.cmp(a)); // Sort in descending order for safe removal
+                group_members.dedup(); // Remove duplicates
+
+                // Remove all group members
+                for &member_idx in &group_members {
+                    if member_idx < points().len() && points()[member_idx].removable {
+                        // Clean up references before removal
+                        arcs.write()
+                            .retain(|&(p1, p2)| p1 != member_idx && p2 != member_idx);
+                        great_circles.write().retain(|x| x.pole != member_idx);
+                        small_circles.write().retain(|sc| sc.pole != member_idx);
+
+                        // Store the last index before removal
+                        let last_idx = points().len() - 1;
+
+                        // Remove the point
+                        points.write().swap_remove(member_idx);
+
+                        // Update the ID of the swapped point if it exists
+                        if member_idx < points().len() {
+                            points.write()[member_idx].id = member_idx;
+                        }
+
+                        // Fix indices after swap_remove - update references from last_idx to member_idx
+                        if member_idx != last_idx {
+                            for (p1, p2) in arcs.write().iter_mut() {
+                                if *p1 == last_idx {
+                                    *p1 = member_idx;
+                                }
+                                if *p2 == last_idx {
+                                    *p2 = member_idx;
+                                }
+                            }
+                            for x in great_circles.write().iter_mut() {
+                                if x.pole == last_idx {
+                                    x.pole = member_idx;
+                                }
+                            }
+                            for sc in small_circles.write().iter_mut() {
+                                if sc.pole == last_idx {
+                                    sc.pole = member_idx;
+                                }
+                            }
+                        }
+
+                        s.update_group_indices(member_idx);
                     }
                 }
-                for x in great_circles.write().iter_mut() {
-                    if x.pole == len {
-                        x.pole = i;
-                    }
-                }
-                for sc in small_circles.write().iter_mut() {
-                    if sc.pole == len {
-                        sc.pole = i;
-                    }
-                }
-                s.pop_selected();
+                s.clear_selection();
+                break;
             }
             Key::Escape => {
                 s.clear_selection();

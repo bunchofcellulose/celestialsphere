@@ -1,9 +1,9 @@
 [application]
 
 [web.app]
-base_path = "celestialsphere"
+# base_path = "celestialsphere"
 title = "Celestial Sphere"
-out_dir = "docs"
+# out_dir = "docs"
 
 [web.resource]
 style = []

@@ -2,47 +2,149 @@ use crate::*;
 
 #[component]
 pub fn SelectionBox(points: Signal<Vec<Point>>, state: Signal<State>) -> Element {
+    let selected_points: Vec<Point> = state
+        .read()
+        .selected()
+        .iter()
+        .map(|&id| points.read()[id].clone())
+        .collect();
+
     rsx! {
         div { class: "right-info-boxes-container",
-            for Point { id , absolute : [x , y , z] , name , movable , removable , abs_polar : [theta , phi] , rotated : [rx , ry , rz] , rot_polar : [rtheta , rphi] } in state.read().selected().iter().map(|&id| points.read()[id].clone()) {
-                div { class: "info-box",
-                    "Absolute Coordinates:"
-                    br {}
-                    "x: {x:.2}, y: {-y:.2}, z: {z:.2}"
-                    br {}
-                    "θ: {-theta:.2}, φ: {phi:.2}°"
-                    br {}
-                    br {}
-                    "Rotated Frame Coordinates:"
-                    br {}
-                    "x: {rx:.2}, y: {-ry:.2}, z: {rz:.2}"
-                    br {}
-                    "θ: {-rtheta:.2}, φ: {rphi:.2}"
-                    br {}
-                    br {}
-                    "ID: {id}"
-                    br {}
-                    "Name: {name}"
-                    br {}
-                    div {
-                        input {
-                            r#type: "checkbox",
-                            checked: "{movable}",
-                            onchange: move |event| {
-                                points.write()[id].movable = event.value() == "true";
-                            },
+            if selected_points.len() > 3 {
+                div { class: "info-box compact-selection",
+                    h3 { "Multiple Selection ({selected_points.len()} points)" }
+                    div { class: "selection-summary",
+                        {
+                            let ids = selected_points
+                                .iter()
+                                .map(|p| p.id.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            format!("IDs: {}", ids)
                         }
-                        span { "Movable" }
+                        br {}
+                        {
+                            let names = selected_points
+                                .iter()
+                                .map(|p| {
+                                    if p.name.is_empty() { "[unnamed]".to_string() } else { p.name.clone() }
+                                })
+                                .collect::<Vec<_>>()
+                                .join(", ");
+                            format!("Names: {}", names)
+                        }
                     }
-                    div {
-                        input {
-                            r#type: "checkbox",
-                            checked: "{removable}",
-                            onchange: move |event| {
-                                points.write()[id].removable = event.value() == "true";
-                            },
+                    div { class: "selection-controls",
+                        h4 { "Bulk Actions:" }
+                        div { class: "checkbox-row",
+                            input {
+                                r#type: "checkbox",
+                                id: "bulk-movable",
+                                checked: selected_points.iter().all(|p| p.movable),
+                                onchange: move |event| {
+                                    let new_value = event.value() == "true";
+                                    for &id in state.read().selected() {
+                                        points.write()[id].movable = new_value;
+                                    }
+                                },
+                            }
+                            label { r#for: "bulk-movable", "All Movable" }
                         }
-                        span { "Removable" }
+                        div { class: "checkbox-row",
+                            input {
+                                r#type: "checkbox",
+                                id: "bulk-removable",
+                                checked: selected_points.iter().all(|p| p.removable),
+                                onchange: move |event| {
+                                    let new_value = event.value() == "true";
+                                    for &id in state.read().selected() {
+                                        points.write()[id].removable = new_value;
+                                    }
+                                },
+                            }
+                            label { r#for: "bulk-removable", "All Removable" }
+                        }
+                        div { class: "checkbox-row",
+                            input {
+                                r#type: "checkbox",
+                                id: "bulk-hidden",
+                                checked: selected_points.iter().all(|p| p.hidden),
+                                onchange: move |event| {
+                                    let new_value = event.value() == "true";
+                                    for &id in state.read().selected() {
+                                        points.write()[id].hidden = new_value;
+                                    }
+                                },
+                            }
+                            label { r#for: "bulk-hidden", "All Hidden" }
+                        }
+                    }
+                }
+            } else {
+                div {
+                    class: "selection-details",
+                    style: "max-height: 80vh; overflow-y: auto;",
+                    for Point { id , absolute : [x , y , z] , name , movable , removable , hidden , abs_polar : [theta , phi] , rotated : [rx , ry , rz] , rot_polar : [rtheta , rphi] } in selected_points {
+                        div { class: "info-box",
+                            "Absolute Coordinates:"
+                            br {}
+                            "x: {x:.2}, y: {-y:.2}, z: {z:.2}"
+                            br {}
+                            "θ: {-theta:.2}, φ: {phi:.2}°"
+                            br {}
+                            br {}
+                            "Rotated Frame Coordinates:"
+                            br {}
+                            "x: {rx:.2}, y: {-ry:.2}, z: {rz:.2}"
+                            br {}
+                            "θ: {-rtheta:.2}, φ: {rphi:.2}"
+                            br {}
+                            br {}
+                            "ID: {id}"
+                            br {}
+                            "Name: {name}"
+                            if name.is_empty() {
+                                " [unnamed]"
+                            }
+                            br {}
+                            br {}
+                            div { class: "point-controls",
+                                div { class: "checkbox-row",
+                                    input {
+                                        r#type: "checkbox",
+                                        id: "movable-{id}",
+                                        checked: "{movable}",
+                                        onchange: move |event| {
+                                            points.write()[id].movable = event.value() == "true";
+                                        },
+                                    }
+                                    label { r#for: "movable-{id}", "Movable" }
+                                }
+                                div { class: "checkbox-row",
+                                    input {
+                                        r#type: "checkbox",
+                                        id: "removable-{id}",
+                                        checked: "{removable}",
+                                        onchange: move |event| {
+                                            points.write()[id].removable = event.value() == "true";
+                                        },
+                                    }
+                                    label { r#for: "removable-{id}", "Removable" }
+                                }
+                                div { class: "checkbox-row",
+                                    input {
+                                        r#type: "checkbox",
+                                        id: "hidden-{id}",
+                                        checked: "{hidden}",
+                                        onchange: move |event| {
+                                            points.write()[id].hidden = event.value() == "true";
+                                        },
+                                    }
+                                    label { r#for: "hidden-{id}", "Hidden" }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -130,6 +232,17 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, state: Signal<State>) -> Element
                 }
                 label { r#for: "grid-toggle", "Show coordinate grid" }
             }
+            div { class: "checkbox-control",
+                input {
+                    r#type: "checkbox",
+                    id: "hide-toggle",
+                    checked: "{state.read().show_hidden}",
+                    onchange: move |evt| {
+                        state.write().show_hidden = evt.value() == "true";
+                    },
+                }
+                label { r#for: "hide-toggle", "Show hidden points" }
+            }
         }
     }
 }
@@ -143,6 +256,43 @@ pub fn LeftPanel(
 ) -> Element {
     rsx! {
         div { class: "left-info-boxes-container",
+            // Group information box
+            if state.read().selected().len() > 1 {
+                if let Some(group_members) = state
+                    .read()
+                    .find_group_containing(state.read().selected()[0])
+                    .map(|group_idx| state.read().groups[group_idx].clone())
+                {
+                    if group_members.iter().all(|&id| state.read().selected().contains(&id)) {
+                        div { class: "info-box",
+                            h3 { "Group Information" }
+                            "Group size: {group_members.len()} points"
+                            br {}
+                            {
+                                let member_ids = group_members
+                                    .iter()
+                                    .map(|id| id.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                format!("Group member ids: {}", member_ids)
+                            }
+                            br {}
+                            {
+                                let member_names = group_members
+                                    .iter()
+                                    .map(|&id| {
+                                        let name = &points.read()[id].name;
+                                        if name.is_empty() { "[unnamed]".to_string() } else { name.clone() }
+                                    })
+                                    .collect::<Vec<_>>()
+                                    .join(", ");
+                                format!("Group member names: {}", member_names)
+                            }
+                        }
+                    }
+                }
+            }
+
             if let &[pole] = state.read().selected() {
                 if let Some(gc) = great_circles().iter().find(|gc| gc.pole == pole) {
                     div { class: "info-box",
@@ -150,6 +300,9 @@ pub fn LeftPanel(
                         "Pole ID: {pole}"
                         br {}
                         "Name: {gc.name}"
+                        if gc.name.is_empty() {
+                            " [unnamed]"
+                        }
                     }
                 }
                 if let Some(sc) = small_circles.read().iter().find(|sc| sc.pole == pole) {
@@ -158,6 +311,9 @@ pub fn LeftPanel(
                         "Pole ID: {pole}"
                         br {}
                         "Name: {sc.name}"
+                        if sc.name.is_empty() {
+                            " [unnamed]"
+                        }
                         br {}
                         "Plane Distance: {sc.plane_distance:.4}"
                         br {}

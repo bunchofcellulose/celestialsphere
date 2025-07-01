@@ -12,6 +12,7 @@ pub struct Point {
     pub name: String,
     pub movable: bool,
     pub removable: bool,
+    pub hidden: bool
 }
 
 impl Point {
@@ -23,6 +24,7 @@ impl Point {
             name: String::new(),
             movable: true,
             removable: true,
+            hidden: false,
             abs_polar: vec3_to_polar(vec),
             rot_polar: vec3_to_polar(vec),
         }
@@ -37,6 +39,7 @@ impl Point {
             name: String::new(),
             movable: true,
             removable: true,
+            hidden: false,
             abs_polar: vec3_to_polar(vec),
             rot_polar: vec3_to_polar(rotated),
         }
@@ -51,6 +54,7 @@ impl Point {
             name: String::new(),
             movable: true,
             removable: true,
+            hidden: false,
             abs_polar: vec3_to_polar(absolute),
             rot_polar: vec3_to_polar(vec),
         }
@@ -85,6 +89,7 @@ impl Point {
             name: String::new(),
             movable: true,
             removable: true,
+            hidden: false,
         }
     }
 }

@@ -22,6 +22,9 @@
 - `Shift` + type to name the great circle/small circle, while the associated pole point is selected.
 - `Shift` + move to snap a point onto a nearby great circle.
 - `Shift` + Left click on the sphere to add a point on a nearby great circle.
+- `Ctrl` + `h` to hide/show the selected point(s).
+- `Ctrl` + `g` to group the selected points.
+- `Ctrl` + `u` to ungroup the selected points.
 
 ## Features
 
@@ -33,6 +36,8 @@
 - If 3 points are selected, the properties of the triangle formed by them are displayed.
 - Diagrams can be saved as .json files, which can be loaded later. The diagrams can also be saved as .svg files. A fresh new diagram can be obtained. These options are available at the bottom left in the file panel.
 - Small circle having the same pole as a great circle can not be renamed, the great circle has to be first removed, then the small circle can be renamed.
+- Points can be hidden, which will not be displayed on the sphere. This can be toggled by using the checkbox on the top left panel.
+- Points can be grouped, which will allow for easier manipulation of multiple points at once. The grouped points move together, and can be renamed as a group. Ungrouping will remove the group but keep the points intact.
 
 ## TODO
 
@@ -41,5 +46,4 @@
 - Add a method to place a point at a distance and angle from selected points
 - Add a method to place point at a given coordinate.
 - Add features to snap to circle intersections, small circles and arcs.
-- Add feature to group points.
 - Add feature to add multiple small circles with one pole.

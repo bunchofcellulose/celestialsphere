@@ -591,6 +591,9 @@ fn generate_points(points: &[Point], q: Quaternion, config: &SvgConfig) -> Strin
 
     // Render back points first
     for point in points {
+        if point.hidden {
+            continue;
+        }
         let p = q.rotate_point_active(point.absolute);
         let (x, y) = config.project_point(p);
         let z = p[2];
@@ -618,6 +621,9 @@ fn generate_points(points: &[Point], q: Quaternion, config: &SvgConfig) -> Strin
 
     // Render front points
     for point in points {
+        if point.hidden {
+            continue;
+        }
         let p = q.rotate_point_active(point.absolute);
         let (x, y) = config.project_point(p);
         let z = p[2];
