@@ -250,7 +250,64 @@ pub fn handle_key_event(
         Key::Character(ref c)
             if (c.as_str() == "h" || c.as_str() == "H") && event.modifiers().ctrl() =>
         {
-            s.show_hidden = !s.show_hidden;
+            for &selected_id in s.selected().iter() {
+                let group_members = s.get_group_members(selected_id);
+                for member in group_members {
+                    let current = points.read()[member].hidden;
+                    points.write()[member].hidden = !current;
+                }
+            }
+            return;
+        }
+        Key::Character(ref c)
+            if (c.as_str() == "a" || c.as_str() == "A") && event.modifiers().ctrl() =>
+        {
+            // Rotate around X axis
+            let rotation_step = 2.0; // smaller step for smoother rotation (degrees)
+            let rotation = Quaternion::from_axis_angle(
+                [1.0, 0.0, 0.0],
+                rotation_step * std::f64::consts::PI / 180.0,
+            );
+            let new_rotation = rotation.multiply(s.quaternion);
+            s.quaternion = new_rotation;
+            s.rotation = new_rotation.to_euler_deg();
+            for point in points.write().iter_mut() {
+                point.rotate(new_rotation);
+            }
+            return;
+        }
+        Key::Character(ref c)
+            if (c.as_str() == "s" || c.as_str() == "S") && event.modifiers().ctrl() =>
+        {
+            // Rotate around Y axis
+            let rotation_step = 2.0; // smaller step for smoother rotation (degrees)
+            let rotation = Quaternion::from_axis_angle(
+                [0.0, 1.0, 0.0],
+                rotation_step * std::f64::consts::PI / 180.0,
+            );
+            let new_rotation = rotation.multiply(s.quaternion);
+            s.quaternion = new_rotation;
+            s.rotation = new_rotation.to_euler_deg();
+            for point in points.write().iter_mut() {
+                point.rotate(new_rotation);
+            }
+            return;
+        }
+        Key::Character(ref c)
+            if (c.as_str() == "d" || c.as_str() == "D") && event.modifiers().ctrl() =>
+        {
+            // Rotate around Z axis
+            let rotation_step = 2.0; // smaller step for smoother rotation (degrees)
+            let rotation = Quaternion::from_axis_angle(
+                [0.0, 0.0, 1.0],
+                rotation_step * std::f64::consts::PI / 180.0,
+            );
+            let new_rotation = rotation.multiply(s.quaternion);
+            s.quaternion = new_rotation;
+            s.rotation = new_rotation.to_euler_deg();
+            for point in points.write().iter_mut() {
+                point.rotate(new_rotation);
+            }
             return;
         }
         _ => {}

@@ -25,6 +25,9 @@
 - `Ctrl` + `h` to hide/show the selected point(s).
 - `Ctrl` + `g` to group the selected points.
 - `Ctrl` + `u` to ungroup the selected points.
+- `Ctrl` + `a` to rotate the sphere in the x direction.
+- `Ctrl` + `s` to rotate the sphere in the y direction.
+- `Ctrl` + `d` to rotate the sphere in the z direction.
 
 ## Features
 
