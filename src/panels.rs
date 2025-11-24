@@ -243,6 +243,17 @@ pub fn SlidersPanel(points: Signal<Vec<Point>>, state: Signal<State>) -> Element
                 }
                 label { r#for: "hide-toggle", "Show hidden points" }
             }
+            div { class: "checkbox-control",
+                input {
+                    r#type: "checkbox",
+                    id: "center-toggle",
+                    checked: "{state.read().show_center}",
+                    onchange: move |evt| {
+                        state.write().show_center = evt.value() == "true";
+                    },
+                }
+                label { r#for: "center-toggle", "Show center point" }
+            }
         }
     }
 }

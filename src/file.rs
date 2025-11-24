@@ -107,6 +107,17 @@ pub fn save_svg(
         svg.push_str(&generate_longitude_lines(q, &config));
     }
 
+    // Draw central "earth" if enabled in state
+    if state.read().show_center {
+        // blue globe
+        svg.push_str(&format!(
+            r#"<circle cx="{:.2}" cy="{:.2}" r="{:.2}" fill="rgba(0,122,255,0.95)"/>"#,
+            config.center.0,
+            config.center.1,
+            config.radius * 0.05
+        ));
+    }
+
     // Add geometric elements
     svg.push_str(&generate_great_circles(
         &great_circles.read(),

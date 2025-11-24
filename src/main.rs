@@ -129,6 +129,14 @@ pub fn Sphere(
                     if state.read().show_grid {
                         CoordinateGrid { state }
                     }
+                    if state.read().show_center {
+                        circle {
+                            cx: "50",
+                            cy: "50",
+                            r: "2",
+                            fill: "blue",
+                        }
+                    }
                     GreatCircleDrawer { great_circles, points }
                     SmallCircleDrawer { small_circles, points }
                     GreatCircleLabels { great_circles, points }
@@ -188,6 +196,7 @@ pub struct State {
     pub quaternion: Quaternion,
     pub show_grid: bool,
     pub show_hidden: bool,
+    pub show_center: bool,
     pub groups: Vec<Vec<usize>>,
 }
 
@@ -200,6 +209,7 @@ impl State {
             quaternion: Quaternion::identity(),
             show_grid: false,
             show_hidden: false,
+            show_center: false,
             groups: vec![],
         }
     }
