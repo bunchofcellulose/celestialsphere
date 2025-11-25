@@ -109,7 +109,6 @@ pub fn save_svg(
 
     // Draw central "earth" if enabled in state
     if state.read().show_center {
-        // blue globe
         svg.push_str(&format!(
             r#"<circle cx="{:.2}" cy="{:.2}" r="{:.2}" fill="rgba(0,122,255,0.95)"/>"#,
             config.center.0,
