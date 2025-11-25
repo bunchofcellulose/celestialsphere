@@ -1,0 +1,4 @@
+
+[application]
+out_dir = "build"
+base_path = "/"

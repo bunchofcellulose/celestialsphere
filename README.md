@@ -50,3 +50,7 @@
 - Add a method to place point at a given coordinate.
 - Add features to snap to circle intersections, small circles and arcs.
 - Add feature to add multiple small circles with one pole.
+
+## Building from Source
+
+Delete the `docs` folder if it exists, then run `dx build --release --platform web`
