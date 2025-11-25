@@ -53,4 +53,4 @@
 
 ## Building from Source
 
-Delete the `docs` folder if it exists, then run `dx build --release --platform web`
+[Dioxus](https://dioxuslabs.com/learn/0.7/guides/deploy/)

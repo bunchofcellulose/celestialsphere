@@ -1,4 +1,5 @@
-
 [application]
-out_dir = "build"
 base_path = "/"
+
+[web-app]
+base_path = "https://github.com/bunchofcellulose/celestialsphere"
