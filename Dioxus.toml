@@ -1,9 +1,8 @@
 [application]
-base_path = "/celestialsphere/"
-
-[web-app]
-base_path = "https://github.com/bunchofcellulose/celestialsphere"
+name = "celestialsphere"
+default_platform = "web"
 
 [web]
 app = "celestialsphere"
 title = "Celestial Sphere"
+base_path = "/celestialsphere/"
