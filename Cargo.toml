@@ -19,6 +19,9 @@ web = ["dioxus/web"]
 desktop = ["dioxus/desktop"]
 mobile = ["dioxus/mobile"]
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [profile]
 
 [profile.wasm-dev]

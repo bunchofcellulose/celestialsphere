@@ -25,10 +25,28 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-      - name: Build with custom command
-        run: echo "Using pre-built files in docs directory"
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+
+      - name: Add wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
+      - name: Build web WASM
+        run: |
+          mkdir -p docs/wasm
+          wasm-pack build --release --target web --out-dir ./docs/wasm
+
+      - name: Copy assets
+        run: |
+          if [ -d "assets" ]; then cp -r assets docs/ || true; fi
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
