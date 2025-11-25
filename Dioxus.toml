@@ -1,5 +1,5 @@
 [application]
-base_path = "/"
+base_path = "/celestialsphere/"
 
 [web-app]
 base_path = "https://github.com/bunchofcellulose/celestialsphere"
