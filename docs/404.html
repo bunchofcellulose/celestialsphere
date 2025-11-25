@@ -1,25 +1,13 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Celestial Sphere</title>
-    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta charset="UTF-8" />
-  <link rel="preload" as="script" href="/celestialsphere/assets/celestialsphere-5a1cf16b1b6f309d.js" crossorigin><link rel="preload" as="fetch" type="application/wasm" href="/celestialsphere/assets/celestialsphere_bg-ce9b878bad8e3bba.wasm" crossorigin></head>
-  <body>
-    <div id="main"></div>
-  <script>
-            // We can't use a module script here because we need to start the script immediately when streaming
-            import("/celestialsphere/assets/celestialsphere-5a1cf16b1b6f309d.js").then(
-                ({ default: init }) => {
-                init("/celestialsphere/assets/celestialsphere_bg-ce9b878bad8e3bba.wasm").then((wasm) => {
-                    if (wasm.__wbindgen_start == undefined) {
-                    wasm.main();
-                    }
-                });
-                }
-            );
-            </script>
-            
+    <head>
+        <title>dioxus | ⛺</title>
+        <meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta charset="UTF-8">
+    <link rel="preload" as="script" href="/./assets/celestialsphere-dxh27c92b8b21eda9e2.js" crossorigin></head>
+    <body>
+        <div id="main"></div>
+    <script type="module" async src="/./assets/celestialsphere-dxh27c92b8b21eda9e2.js"></script>
             </body>
 </html>
