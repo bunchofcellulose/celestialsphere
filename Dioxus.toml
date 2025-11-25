@@ -3,3 +3,7 @@ base_path = "/"
 
 [web-app]
 base_path = "https://github.com/bunchofcellulose/celestialsphere"
+
+[web]
+app = "celestialsphere"
+title = "Celestial Sphere"

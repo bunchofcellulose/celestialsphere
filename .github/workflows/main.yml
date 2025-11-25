@@ -35,22 +35,16 @@ jobs:
       - name: Add wasm target
         run: rustup target add wasm32-unknown-unknown
 
-      - name: Install wasm-pack
-        run: cargo install wasm-pack --locked
+      - name: Install dioxus CLI
+        run: cargo install dioxus-cli
 
-      - name: Build web WASM
-        run: |
-          mkdir -p docs/wasm
-          wasm-pack build --release --target web --out-dir ./docs/wasm
-
-      - name: Copy assets
-        run: |
-          if [ -d "assets" ]; then cp -r assets docs/ || true; fi
+      - name: Build with dioxus
+        run: dx build --release
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './docs'
+          path: './dist'
 
   # Deployment job
   deploy:
