@@ -40,11 +40,13 @@ jobs:
 
       - name: Build with dioxus
         run: dx build --release
+        env:
+          DIOXUS_SKIP_WASM_OPT: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: './dist'
+          path: "./target/dx/celestialsphere/release/web/public"
 
   # Deployment job
   deploy:
